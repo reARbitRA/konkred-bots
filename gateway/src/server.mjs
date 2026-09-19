@@ -49,8 +49,8 @@ function send(res, status, payload, extraHeaders = {}) {
   res.end(body);
 }
 
-function sendError(res, status, code, message, extra = {}) {
-  send(res, status, { error: { code, message, ...extra } });
+function sendError(res, status, code, message, extra = {}, extraHeaders = {}) {
+  send(res, status, { error: { code, message, ...extra } }, extraHeaders);
 }
 
 /** Read and JSON-parse the request body with a hard size cap. */
@@ -158,19 +158,33 @@ async function handleAi(req, res, id) {
       return;
     }
     if (error instanceof RateLimitError) {
-      sendError(res, 429, error.code, error.message, {
-        retryAfterMs: error.retryAfterMs, limits: error.limits, usage: error.usage, requestId: id,
-      });
-      res.setHeader?.('retry-after', Math.ceil(error.retryAfterMs / 1000));
+      // `retry-after` must go out with the response headers, not after them.
+      sendError(
+        res,
+        429,
+        error.code,
+        error.message,
+        { retryAfterMs: error.retryAfterMs, limits: error.limits, usage: error.usage, requestId: id },
+        { 'retry-after': Math.max(1, Math.ceil((error.retryAfterMs ?? 1000) / 1000)) },
+      );
       return;
     }
     if (error instanceof ExhaustedError) {
-      sendError(res, error.status, error.code, error.message, {
-        attempts: error.attempts,
-        retryAfterMs: error.retryAfterMs,
-        lastError: error.lastError ? error.lastError.toJSON?.() ?? String(error.lastError.message) : null,
-        requestId: id,
-      });
+      sendError(
+        res,
+        error.status,
+        error.code,
+        error.message,
+        {
+          attempts: error.attempts,
+          retryAfterMs: error.retryAfterMs,
+          lastError: error.lastError ? error.lastError.toJSON?.() ?? String(error.lastError.message) : null,
+          requestId: id,
+        },
+        error.retryAfterMs > 0
+          ? { 'retry-after': Math.max(1, Math.ceil(error.retryAfterMs / 1000)) }
+          : {},
+      );
       return;
     }
     log.error('unhandled gateway error', { requestId: id, error: String(error?.stack ?? error) });

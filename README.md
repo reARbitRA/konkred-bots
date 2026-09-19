@@ -423,7 +423,7 @@ provider — no outbound network calls at all, which is exactly what CI uses.
 ## Testing
 
 ```bash
-# Gateway — 48 tests, ~1.6s
+# Gateway — 49 tests, ~1.9s
 cd gateway && node --test test/*.test.mjs
 
 # Bots — compile + lint
@@ -440,7 +440,7 @@ CI runs four jobs on every push and pull request:
 
 | Job | What it proves |
 |---|---|
-| **gateway** | registry is valid, every `.mjs` parses, the full import graph resolves, 48 unit tests pass, and a live server answers health/models/meta/inference, rejects a bad admin key with `401`, accepts the real one with `200`, and rejects a malformed body with `400` |
+| **gateway** | registry is valid, every `.mjs` parses, the full import graph resolves, 49 unit tests pass, and a live server answers health/models/meta/inference, rejects a bad admin key with `401`, accepts the real one with `200`, and rejects a malformed body with `400` |
 | **bots** | every module byte-compiles, flake8 is clean, routers and command menus line up with `BOT_SPECS` and every router has handlers, the message splitter holds its invariants over 300 randomised cases, and history + FSM namespaces are proven isolated on fakeredis |
 | **integration** | the real `GatewayClient` drives a real gateway over HTTP across every task route the bots use, including multimodal audio parts and JSON mode, and the rate limiter produces a correctly typed, user-presentable error |
 | **compose** | `docker compose config` validates, the service list is exactly `bot gateway redis`, every YAML manifest parses, and `setup.sh` is executable and passes `bash -n` plus shellcheck |
@@ -543,7 +543,7 @@ konkred-bots/
 │   │   ├── providers/          gemini · openai-compat · cloudflare · mock
 │   │   └── gateway/            cache · dedup · key-pool · router
 │   │                           fallback · user-limiter · fusion
-│   └── test/gateway.test.mjs   48 tests
+│   └── test/gateway.test.mjs   49 tests
 │
 └── bots/                       Python 3.11 · Aiogram 3.15
     ├── Dockerfile              multi-stage, non-root, tini

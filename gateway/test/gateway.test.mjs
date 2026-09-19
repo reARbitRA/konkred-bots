@@ -920,3 +920,55 @@ test('dashboard renders valid escaped HTML', () => {
   assert.ok(html.includes('&lt;script&gt;'));
   gateway.shutdown();
 });
+
+test('HTTP 429 carries a retry-after header and never double-writes', async (t) => {
+  // Regression: the rate-limit branch used to call res.setHeader() *after*
+  // sendError() had already written the head, raising ERR_HTTP_HEADERS_SENT
+  // as an unhandled rejection on every throttled request.
+  const rejections = [];
+  const onRejection = (reason) => rejections.push(reason);
+  process.on('unhandledRejection', onRejection);
+  t.after(() => process.off('unhandledRejection', onRejection));
+
+  process.env.MOCK_ONLY = 'true';
+  // CONFIG is a module singleton that earlier tests have already imported, so
+  // USER_RPM cannot be lowered here - burst past the real default instead.
+  const [{ server }, { CONFIG }] = await Promise.all([
+    import('../src/server.mjs'),
+    import('../src/config.mjs'),
+  ]);
+  const burst = CONFIG.userRpm + 3;
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+
+  const call = () => fetch(`http://127.0.0.1:${port}/api/ai`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      taskType: 'general',
+      userId: 'retry-after-probe',
+      maxTokens: 16,
+      messages: [{ role: 'user', content: 'probe' }],
+    }),
+  });
+
+  let throttled = null;
+  for (let i = 0; i < burst && !throttled; i += 1) {
+    const response = await call();
+    if (response.status === 429) throttled = response;
+    else await response.arrayBuffer();
+  }
+
+  assert.ok(throttled, 'the limiter should reject once USER_RPM is exceeded');
+  const retryAfter = Number(throttled.headers.get('retry-after'));
+  assert.ok(Number.isInteger(retryAfter) && retryAfter >= 1, `retry-after should be a positive integer, got ${retryAfter}`);
+
+  const payload = await throttled.json();
+  assert.equal(payload.error.code, 'user_rpm');
+  assert.ok(payload.error.retryAfterMs > 0);
+
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(rejections, [], 'no unhandled rejection should escape the 429 path');
+});
