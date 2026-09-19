@@ -31,7 +31,7 @@ every pull request into `main`:
 
 | Job | Checks |
 |---|---|
-| **gateway** | Registry validation (no duplicate keys, no missing fields, no unknown providers), `node --check` on every `.mjs`, full ESM import-graph resolution, 51 unit tests, then a live server smoke test: health, models, meta, a real inference call, `401` on a bad admin key, `200` on the right one, and `400` on a malformed body |
+| **gateway** | Registry validation (no duplicate keys, no missing fields, no unknown providers), `node --check` on every `.mjs`, full ESM import-graph resolution, 55 unit tests (including an env contract suite that fails when .env.example documents a knob no code reads), then a live server smoke test: health, models, meta, a real inference call, `401` on a bad admin key, `200` on the right one, and `400` on a malformed body |
 | **bots** | `compileall`, `flake8`, router/command wiring against `BOT_SPECS`, 300 randomised message-splitter invariant cases, graceful degradation across 25 gateway-failure scenarios, a live end-to-end run of every bot flow against a real `MOCK_ONLY` gateway over HTTP (including a task-type contract check), and Redis history + FSM namespace isolation on fakeredis |
 | **integration** | The real `GatewayClient` against a real gateway over HTTP: every task route the bots use, multimodal audio parts, JSON mode, and a typed rate-limit error |
 | **compose** | `docker compose config`, exact service list, YAML validity of every manifest, and `setup.sh` executable + `bash -n` + shellcheck |

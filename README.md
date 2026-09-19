@@ -434,7 +434,7 @@ provider — no outbound network calls at all, which is exactly what CI uses.
 ## Testing
 
 ```bash
-# Gateway — 51 tests, ~1.9s
+# Gateway — 55 tests, ~1.9s
 cd gateway && node --test test/*.test.mjs
 
 # Bots — compile + lint
@@ -562,7 +562,7 @@ konkred-bots/
 │   │   ├── providers/          gemini · openai-compat · cloudflare · mock
 │   │   └── gateway/            cache · dedup · key-pool · router
 │   │                           fallback · user-limiter · fusion
-│   └── test/gateway.test.mjs   51 tests
+│   └── test/                   gateway.test.mjs (51) + env-contract.test.mjs (4)
 │
 └── bots/                       Python 3.11 · Aiogram 3.15
     ├── Dockerfile              multi-stage, non-root, tini
