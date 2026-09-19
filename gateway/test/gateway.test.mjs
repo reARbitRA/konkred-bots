@@ -129,7 +129,13 @@ test('backoffDelay grows exponentially and stays within the jitter band', () => 
       assert.ok(delay <= expected * 1.1 + 1, `${delay} <= ${expected * 1.1}`);
     }
   }
-  assert.ok(backoffDelay(50, 1000, 5000) <= 5000 * 1.1 + 1, 'respects the cap');
+  // The cap is a hard ceiling, not a soft one: jitter must be applied before
+  // clamping, otherwise a slot stays cooled down past the documented maximum.
+  for (let i = 0; i < 500; i += 1) {
+    assert.ok(backoffDelay(50, 1000, 5000) <= 5000, 'never exceeds the cap');
+  }
+  assert.equal(backoffDelay(50, 1000, 5000), 5000, 'saturates exactly at the cap');
+  assert.ok(backoffDelay(0, 1000) >= 0, 'zero errors never yields a negative delay');
 });
 
 test('timezone helpers produce a stable day boundary', () => {

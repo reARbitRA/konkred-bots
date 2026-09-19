@@ -114,7 +114,10 @@ export function jitter(spread = 0.1) {
 export function backoffDelay(errors, base = 1000, max = 15 * 60 * 1000, spread = 0.1) {
   const exponent = Math.max(0, Math.floor(errors) - 1);
   const raw = base * 2 ** Math.min(exponent, 24);
-  return Math.round(Math.min(max, raw) * jitter(spread));
+  // Clamp *after* jitter: clamping first lets the jitter multiplier push the
+  // result back above `max`, which would hold a slot cooled down past the
+  // documented ceiling.
+  return Math.max(0, Math.round(Math.min(raw * jitter(spread), max)));
 }
 
 /** JSON.parse that returns a fallback instead of throwing. */
