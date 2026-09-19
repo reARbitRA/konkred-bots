@@ -15,6 +15,10 @@ __pycache__/
 .eggs/
 .mypy_cache/
 .pytest_cache/
+
+# Test suites are CI-only; the runtime image does not need them (and they
+# pull in dev-only deps like fakeredis that are not in requirements.txt).
+tests/
 .ruff_cache/
 .coverage
 htmlcov/
