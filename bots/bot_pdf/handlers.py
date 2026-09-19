@@ -22,6 +22,7 @@ from shared.config import settings
 from shared.gateway_client import GatewayError, gateway
 from shared.history import HistoryManager
 from shared.utils import (
+    UNEXPECTED_ERROR,
     clean_model_output,
     escape_html,
     extract_json_block,
@@ -384,6 +385,10 @@ async def callback_analysis(query: CallbackQuery, state: FSMContext, history: Hi
     except GatewayError as exc:
         await status.edit_text(exc.user_message())
         return
+    except Exception:  # noqa: BLE001 - last resort: never strand the user
+        logger.exception("unexpected handler failure")
+        await status.edit_text(UNEXPECTED_ERROR)
+        return
 
     await history.add_exchange(query.from_user.id, f"[{action} of {doc_name}]", answer)
     await status.delete()
@@ -438,6 +443,10 @@ async def callback_quiz(query: CallbackQuery, state: FSMContext) -> None:
         )
     except GatewayError as exc:
         await status.edit_text(exc.user_message())
+        return
+    except Exception:  # noqa: BLE001 - last resort: never strand the user
+        logger.exception("unexpected handler failure")
+        await status.edit_text(UNEXPECTED_ERROR)
         return
 
     payload = extract_json_block(raw)
@@ -615,6 +624,10 @@ async def handle_question(message: Message, state: FSMContext, history: HistoryM
         )
     except GatewayError as exc:
         await thinking.edit_text(exc.user_message())
+        return
+    except Exception:  # noqa: BLE001 - last resort: never strand the user
+        logger.exception("unexpected handler failure")
+        await thinking.edit_text(UNEXPECTED_ERROR)
         return
 
     await history.add_exchange(message.from_user.id, message.text, answer)

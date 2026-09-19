@@ -22,6 +22,7 @@ from .gateway_client import (
 )
 from .history import HistoryManager
 from .utils import (
+    UNEXPECTED_ERROR,
     clean_model_output,
     escape_html,
     extract_json_block,
@@ -34,6 +35,7 @@ from .utils import (
 
 __all__ = [
     "BOT_SPECS",
+    "UNEXPECTED_ERROR",
     "BotSpec",
     "GatewayClient",
     "GatewayError",

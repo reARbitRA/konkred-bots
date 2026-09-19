@@ -439,6 +439,9 @@ cd gateway && node --test test/*.test.mjs
 
 # Bots — compile + lint
 cd bots && python -m compileall -q . && python -m flake8 .
+
+# Bots — graceful degradation when the gateway cannot answer (25 scenarios)
+cd bots && python tests/test_degradation.py
 ```
 
 > **Activating CI:** the pipeline lives at `ci/github-actions-ci.yml` rather
@@ -452,7 +455,7 @@ CI runs four jobs on every push and pull request:
 | Job | What it proves |
 |---|---|
 | **gateway** | registry is valid, every routed model still exists in it, every `.mjs` parses, the full import graph resolves, 51 unit tests pass, and a live server answers health/models/meta/inference, rejects a bad admin key with `401`, accepts the real one with `200`, and rejects a malformed body with `400` |
-| **bots** | every module byte-compiles, flake8 is clean, routers and command menus line up with `BOT_SPECS` and every router has handlers, the message splitter holds its invariants over 300 randomised cases, and history + FSM namespaces are proven isolated on fakeredis |
+| **bots** | every module byte-compiles, flake8 is clean, routers and command menus line up with `BOT_SPECS` and every router has handlers, the message splitter holds its invariants over 300 randomised cases, all five bots degrade gracefully across 25 gateway-failure scenarios, and history + FSM namespaces are proven isolated on fakeredis |
 | **integration** | the real `GatewayClient` drives a real gateway over HTTP across every task route the bots use, including multimodal audio parts and JSON mode, and the rate limiter produces a correctly typed, user-presentable error |
 | **compose** | `docker compose config` validates, the service list is exactly `bot gateway redis`, every YAML manifest parses, both build contexts exclude secrets/caches, the gateway is still dependency-free, and `setup.sh` is executable and passes `bash -n` plus shellcheck |
 
@@ -563,6 +566,7 @@ konkred-bots/
     ├── main.py                 orchestrator: N bots, one event loop
     ├── requirements.txt
     ├── shared/                 config · gateway_client · history · utils
+    ├── tests/                  graceful-degradation suite (25 scenarios)
     ├── bot_voice/              transcription, summary, action items
     ├── bot_pdf/                summary, quiz, flashcards, risk analysis
     ├── bot_ielts/              three-part FSM mock interview

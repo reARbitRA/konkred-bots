@@ -22,7 +22,7 @@ from aiogram.types import CallbackQuery, Message
 
 from shared.gateway_client import GatewayError, gateway
 from shared.history import HistoryManager
-from shared.utils import clean_model_output, escape_html, send_long_message
+from shared.utils import UNEXPECTED_ERROR, clean_model_output, escape_html, send_long_message
 
 from .keyboards import CB_PREFIX, main_menu, news_menu, report_menu
 
@@ -200,6 +200,10 @@ async def _report(
         )
     except GatewayError as exc:
         await status.edit_text(exc.user_message(), reply_markup=main_menu())
+        return
+    except Exception:  # noqa: BLE001 - last resort: never strand the user
+        logger.exception("unexpected failure while building the %s report", subject)
+        await status.edit_text(UNEXPECTED_ERROR, reply_markup=main_menu())
         return
 
     await history.add_exchange(user_id, f"[report: {subject}]", report)

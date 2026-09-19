@@ -22,7 +22,8 @@ from aiogram.types import CallbackQuery, Message
 
 from shared.gateway_client import GatewayError, gateway
 from shared.history import HistoryManager
-from shared.utils import clean_model_output, escape_html, send_long_message, truncate
+from shared.utils import (UNEXPECTED_ERROR, clean_model_output, escape_html,
+                          send_long_message, truncate)
 
 from .keyboards import CB_PREFIX, PLATFORMS, TONES, main_menu, platform_menu, result_menu, tone_menu
 
@@ -327,6 +328,10 @@ async def _generate(message: Message, state: FSMContext, history: HistoryManager
     except GatewayError as exc:
         await status.edit_text(exc.user_message(), reply_markup=main_menu())
         return
+    except Exception:  # noqa: BLE001 - last resort: never strand the user
+        logger.exception("unexpected handler failure")
+        await status.edit_text(UNEXPECTED_ERROR)
+        return
 
     await state.update_data(last_script=script[:6000])
     await state.set_state(None)
@@ -389,6 +394,10 @@ async def callback_followup(query: CallbackQuery, state: FSMContext) -> None:
         )
     except GatewayError as exc:
         await status.edit_text(exc.user_message())
+        return
+    except Exception:  # noqa: BLE001 - last resort: never strand the user
+        logger.exception("unexpected handler failure")
+        await status.edit_text(UNEXPECTED_ERROR)
         return
 
     await status.delete()

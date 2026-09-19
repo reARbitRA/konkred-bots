@@ -205,6 +205,9 @@ jobs:
           print("splitter invariants hold over 300 randomised cases")
           PY
 
+      - name: Bots stay usable when the gateway fails
+        run: python tests/test_degradation.py
+
       - name: Redis-backed history and FSM isolation
         run: |
           python - <<'PY'

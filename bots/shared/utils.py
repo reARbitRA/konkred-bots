@@ -275,7 +275,16 @@ def chunk_iterable(items: Iterable[Any], size: int) -> list[list[Any]]:
     return bucket
 
 
+#: Shown when a handler hits a failure that is not a GatewayError. Users must
+#: never be left staring at a "working on it" status that never resolves.
+UNEXPECTED_ERROR = (
+    "⚠️ Something went wrong on my side while handling that.\n"
+    "The error has been logged — please try again in a moment."
+)
+
+
 __all__ = [
+    "UNEXPECTED_ERROR",
     "DEFAULT_CHUNK",
     "TELEGRAM_HARD_LIMIT",
     "chunk_iterable",

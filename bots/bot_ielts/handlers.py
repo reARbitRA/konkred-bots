@@ -26,7 +26,8 @@ from aiogram.types import CallbackQuery, Message
 
 from shared.gateway_client import GatewayError, gateway, inline_data_part, text_part
 from shared.history import HistoryManager
-from shared.utils import clean_model_output, escape_html, send_long_message
+from shared.utils import (UNEXPECTED_ERROR, clean_model_output, escape_html,
+                          send_long_message)
 
 from .keyboards import CB_PREFIX, evaluation_menu, exam_controls, main_menu
 
@@ -367,6 +368,10 @@ async def handle_voice_answer(message: Message, bot: Bot, state: FSMContext) -> 
     except GatewayError as exc:
         await status.edit_text(exc.user_message())
         return
+    except Exception:  # noqa: BLE001 - last resort: never strand the user
+        logger.exception("unexpected handler failure")
+        await status.edit_text(UNEXPECTED_ERROR)
+        return
 
     if not transcript.strip():
         await status.edit_text("🤔 I couldn't hear any speech. Please try recording again.")
@@ -488,6 +493,10 @@ async def _evaluate(message: Message, state: FSMContext) -> None:
         await state.set_state(UserPhase.IDLE)
         await status.edit_text(exc.user_message(), reply_markup=main_menu())
         return
+    except Exception:  # noqa: BLE001 - last resort: never strand the user
+        logger.exception("unexpected handler failure")
+        await status.edit_text(UNEXPECTED_ERROR)
+        return
 
     await state.update_data(last_report=report[:6000], plan=None, index=0)
     await state.set_state(UserPhase.IDLE)
@@ -592,6 +601,10 @@ async def callback_followup(query: CallbackQuery, state: FSMContext) -> None:
     except GatewayError as exc:
         await status.edit_text(exc.user_message())
         return
+    except Exception:  # noqa: BLE001 - last resort: never strand the user
+        logger.exception("unexpected handler failure")
+        await status.edit_text(UNEXPECTED_ERROR)
+        return
 
     await status.delete()
     await send_long_message(query.message, clean_model_output(answer))
@@ -622,6 +635,10 @@ async def handle_idle(message: Message, history: HistoryManager) -> None:
         )
     except GatewayError as exc:
         await thinking.edit_text(exc.user_message())
+        return
+    except Exception:  # noqa: BLE001 - last resort: never strand the user
+        logger.exception("unexpected handler failure")
+        await thinking.edit_text(UNEXPECTED_ERROR)
         return
 
     await history.add_exchange(message.from_user.id, message.text, answer)

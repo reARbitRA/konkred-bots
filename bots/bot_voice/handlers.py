@@ -17,7 +17,8 @@ from aiogram.types import CallbackQuery, Message
 from shared.config import settings
 from shared.gateway_client import GatewayError, gateway, inline_data_part, text_part
 from shared.history import HistoryManager
-from shared.utils import clean_model_output, format_duration, humanize_bytes, send_long_message
+from shared.utils import (UNEXPECTED_ERROR, clean_model_output, format_duration,
+                          humanize_bytes, send_long_message)
 
 from .keyboards import CB_PREFIX, main_menu, result_actions, retry_keyboard
 
@@ -173,6 +174,10 @@ async def handle_audio(message: Message, bot: Bot, history: HistoryManager) -> N
         logger.warning("voice gateway error: %s", exc)
         await status.edit_text(exc.user_message(), reply_markup=retry_keyboard())
         return
+    except Exception:  # noqa: BLE001 - last resort: never strand the user
+        logger.exception("unexpected failure while transcribing audio")
+        await status.edit_text(UNEXPECTED_ERROR, reply_markup=retry_keyboard())
+        return
 
     if not answer:
         await status.edit_text(
@@ -260,6 +265,10 @@ async def handle_callbacks(query: CallbackQuery, history: HistoryManager) -> Non
     except GatewayError as exc:
         await thinking.edit_text(exc.user_message())
         return
+    except Exception:  # noqa: BLE001 - last resort: never strand the user
+        logger.exception("unexpected failure while handling a voice action")
+        await thinking.edit_text(UNEXPECTED_ERROR)
+        return
 
     await history.add_exchange(query.from_user.id, prompt, answer)
     await thinking.delete()
@@ -289,6 +298,10 @@ async def handle_text(message: Message, history: HistoryManager) -> None:
         )
     except GatewayError as exc:
         await thinking.edit_text(exc.user_message())
+        return
+    except Exception:  # noqa: BLE001 - last resort: never strand the user
+        logger.exception("unexpected failure while answering a follow-up")
+        await thinking.edit_text(UNEXPECTED_ERROR)
         return
 
     await history.add_exchange(message.from_user.id, message.text, answer)
