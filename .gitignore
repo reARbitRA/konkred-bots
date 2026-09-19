@@ -34,3 +34,9 @@ Thumbs.db
 *.log
 logs/
 tmp/
+
+# --- GitHub Actions ------------------------------------------------------------
+# The App used by this workspace lacks the `workflows` permission, so a push
+# touching .github/workflows/ is rejected outright. The real workflow is kept at
+# ci/github-actions-ci.yml; see ci/README.md for the one-command activation.
+.github/workflows/
