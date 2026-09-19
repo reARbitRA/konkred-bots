@@ -1,0 +1,311 @@
+{
+  "version": "2026.02.1",
+  "updatedAt": "2026-02-01T00:00:00.000Z",
+  "notes": "Quota registry for the Konkred AI Gateway. Every entry describes one logical model slot: the upstream provider id, the upstream model name, the free-tier quota envelope and the capability surface used by the router. Numbers reflect published free-tier allowances; the watchdog self-calibrates them downward when the upstream disagrees.",
+  "defaults": {
+    "resetTimezone": "UTC",
+    "maxOutputTokens": 4096,
+    "capabilities": ["text"],
+    "latencyClass": "standard",
+    "qualityScore": 0.5
+  },
+  "providers": {
+    "gemini": {
+      "label": "Google AI Studio (Gemini)",
+      "resetTimezone": "America/Los_Angeles",
+      "credentialEnv": ["GEMINI_KEY_P1", "GEMINI_KEY_P2", "GEMINI_KEY_P3"],
+      "docs": "https://ai.google.dev/gemini-api/docs/rate-limits"
+    },
+    "groq": {
+      "label": "Groq Cloud",
+      "resetTimezone": "UTC",
+      "credentialEnv": ["GROQ_API_KEY"],
+      "docs": "https://console.groq.com/docs/rate-limits"
+    },
+    "cerebras": {
+      "label": "Cerebras Inference",
+      "resetTimezone": "UTC",
+      "credentialEnv": ["CEREBRAS_API_KEY"],
+      "docs": "https://inference-docs.cerebras.ai/support/rate-limits"
+    },
+    "mistral": {
+      "label": "Mistral La Plateforme",
+      "resetTimezone": "UTC",
+      "credentialEnv": ["MISTRAL_API_KEY"],
+      "docs": "https://docs.mistral.ai/deployment/laplateforme/tier/"
+    },
+    "openrouter": {
+      "label": "OpenRouter",
+      "resetTimezone": "UTC",
+      "credentialEnv": ["OPENROUTER_API_KEY"],
+      "docs": "https://openrouter.ai/docs/api-reference/limits"
+    },
+    "cloudflare": {
+      "label": "Cloudflare Workers AI",
+      "resetTimezone": "UTC",
+      "credentialEnv": ["CF_API_TOKEN"],
+      "docs": "https://developers.cloudflare.com/workers-ai/platform/limits/"
+    },
+    "github": {
+      "label": "GitHub Models",
+      "resetTimezone": "UTC",
+      "credentialEnv": ["GITHUB_TOKEN"],
+      "docs": "https://docs.github.com/en/github-models/prototyping-with-ai-models"
+    },
+    "mock": {
+      "label": "Built-in deterministic mock",
+      "resetTimezone": "UTC",
+      "credentialEnv": [],
+      "docs": "local"
+    }
+  },
+  "models": [
+    {
+      "key": "gemini:flash",
+      "provider": "gemini",
+      "upstreamModel": "gemini-2.5-flash",
+      "tier": "flagship",
+      "capabilities": ["text", "vision", "audio", "document"],
+      "contextWindow": 1048576,
+      "maxOutputTokens": 65536,
+      "latencyClass": "standard",
+      "qualityScore": 0.93,
+      "resetTimezone": "America/Los_Angeles",
+      "quotas": { "rpm": 10, "tpm": 250000, "rpd": 250, "tpd": 4000000, "tpmonth": 0 }
+    },
+    {
+      "key": "gemini:flash-lite",
+      "provider": "gemini",
+      "upstreamModel": "gemini-2.5-flash-lite",
+      "tier": "fast",
+      "capabilities": ["text", "vision", "audio", "document"],
+      "contextWindow": 1048576,
+      "maxOutputTokens": 65536,
+      "latencyClass": "fast",
+      "qualityScore": 0.82,
+      "resetTimezone": "America/Los_Angeles",
+      "quotas": { "rpm": 15, "tpm": 250000, "rpd": 1000, "tpd": 6000000, "tpmonth": 0 }
+    },
+    {
+      "key": "groq:gpt-oss-120b",
+      "provider": "groq",
+      "upstreamModel": "openai/gpt-oss-120b",
+      "tier": "flagship",
+      "capabilities": ["text", "reasoning"],
+      "contextWindow": 131072,
+      "maxOutputTokens": 32766,
+      "latencyClass": "fast",
+      "qualityScore": 0.9,
+      "resetTimezone": "UTC",
+      "quotas": { "rpm": 30, "tpm": 8000, "rpd": 1000, "tpd": 200000, "tpmonth": 0 }
+    },
+    {
+      "key": "groq:llama-70b",
+      "provider": "groq",
+      "upstreamModel": "llama-3.3-70b-versatile",
+      "tier": "flagship",
+      "capabilities": ["text"],
+      "contextWindow": 131072,
+      "maxOutputTokens": 32768,
+      "latencyClass": "fast",
+      "qualityScore": 0.86,
+      "resetTimezone": "UTC",
+      "quotas": { "rpm": 30, "tpm": 12000, "rpd": 1000, "tpd": 100000, "tpmonth": 0 }
+    },
+    {
+      "key": "groq:llama-8b",
+      "provider": "groq",
+      "upstreamModel": "llama-3.1-8b-instant",
+      "tier": "fast",
+      "capabilities": ["text"],
+      "contextWindow": 131072,
+      "maxOutputTokens": 8192,
+      "latencyClass": "turbo",
+      "qualityScore": 0.68,
+      "resetTimezone": "UTC",
+      "quotas": { "rpm": 30, "tpm": 6000, "rpd": 14400, "tpd": 500000, "tpmonth": 0 }
+    },
+    {
+      "key": "groq:qwen3-32b",
+      "provider": "groq",
+      "upstreamModel": "qwen/qwen3-32b",
+      "tier": "balanced",
+      "capabilities": ["text", "reasoning"],
+      "contextWindow": 131072,
+      "maxOutputTokens": 40960,
+      "latencyClass": "fast",
+      "qualityScore": 0.81,
+      "resetTimezone": "UTC",
+      "quotas": { "rpm": 60, "tpm": 6000, "rpd": 1000, "tpd": 500000, "tpmonth": 0 }
+    },
+    {
+      "key": "groq:kimi-k2",
+      "provider": "groq",
+      "upstreamModel": "moonshotai/kimi-k2-instruct-0905",
+      "tier": "flagship",
+      "capabilities": ["text", "reasoning", "long-context"],
+      "contextWindow": 262144,
+      "maxOutputTokens": 16384,
+      "latencyClass": "standard",
+      "qualityScore": 0.88,
+      "resetTimezone": "UTC",
+      "quotas": { "rpm": 60, "tpm": 10000, "rpd": 1000, "tpd": 300000, "tpmonth": 0 }
+    },
+    {
+      "key": "groq:llama-4-scout",
+      "provider": "groq",
+      "upstreamModel": "meta-llama/llama-4-scout-17b-16e-instruct",
+      "tier": "balanced",
+      "capabilities": ["text", "vision"],
+      "contextWindow": 131072,
+      "maxOutputTokens": 8192,
+      "latencyClass": "fast",
+      "qualityScore": 0.79,
+      "resetTimezone": "UTC",
+      "quotas": { "rpm": 30, "tpm": 30000, "rpd": 1000, "tpd": 500000, "tpmonth": 0 }
+    },
+    {
+      "key": "cerebras:gpt-oss-120b",
+      "provider": "cerebras",
+      "upstreamModel": "gpt-oss-120b",
+      "tier": "flagship",
+      "capabilities": ["text", "reasoning"],
+      "contextWindow": 65536,
+      "maxOutputTokens": 32768,
+      "latencyClass": "turbo",
+      "qualityScore": 0.89,
+      "resetTimezone": "UTC",
+      "quotas": { "rpm": 30, "tpm": 64000, "rpd": 14400, "tpd": 1000000, "tpmonth": 0 }
+    },
+    {
+      "key": "cerebras:llama-8b",
+      "provider": "cerebras",
+      "upstreamModel": "llama3.1-8b",
+      "tier": "fast",
+      "capabilities": ["text"],
+      "contextWindow": 32768,
+      "maxOutputTokens": 8192,
+      "latencyClass": "turbo",
+      "qualityScore": 0.66,
+      "resetTimezone": "UTC",
+      "quotas": { "rpm": 30, "tpm": 60000, "rpd": 14400, "tpd": 1000000, "tpmonth": 0 }
+    },
+    {
+      "key": "cerebras:qwen3-235b",
+      "provider": "cerebras",
+      "upstreamModel": "qwen-3-235b-a22b-instruct-2507",
+      "tier": "flagship",
+      "capabilities": ["text", "reasoning", "long-context"],
+      "contextWindow": 131072,
+      "maxOutputTokens": 32768,
+      "latencyClass": "turbo",
+      "qualityScore": 0.91,
+      "resetTimezone": "UTC",
+      "quotas": { "rpm": 30, "tpm": 60000, "rpd": 14400, "tpd": 1000000, "tpmonth": 0 }
+    },
+    {
+      "key": "mistral:small",
+      "provider": "mistral",
+      "upstreamModel": "mistral-small-latest",
+      "tier": "balanced",
+      "capabilities": ["text", "vision"],
+      "contextWindow": 131072,
+      "maxOutputTokens": 8192,
+      "latencyClass": "standard",
+      "qualityScore": 0.76,
+      "resetTimezone": "UTC",
+      "quotas": { "rpm": 60, "tpm": 500000, "rpd": 2000, "tpd": 2000000, "tpmonth": 1000000000 }
+    },
+    {
+      "key": "mistral:codestral",
+      "provider": "mistral",
+      "upstreamModel": "codestral-latest",
+      "tier": "code",
+      "capabilities": ["text", "code"],
+      "contextWindow": 262144,
+      "maxOutputTokens": 16384,
+      "latencyClass": "standard",
+      "qualityScore": 0.84,
+      "resetTimezone": "UTC",
+      "quotas": { "rpm": 30, "tpm": 500000, "rpd": 2000, "tpd": 2000000, "tpmonth": 1000000000 }
+    },
+    {
+      "key": "openrouter:free-auto",
+      "provider": "openrouter",
+      "upstreamModel": "deepseek/deepseek-chat-v3.1:free",
+      "tier": "balanced",
+      "capabilities": ["text", "reasoning"],
+      "contextWindow": 163840,
+      "maxOutputTokens": 8192,
+      "latencyClass": "slow",
+      "qualityScore": 0.8,
+      "resetTimezone": "UTC",
+      "quotas": { "rpm": 20, "tpm": 40000, "rpd": 50, "tpd": 200000, "tpmonth": 0 }
+    },
+    {
+      "key": "cloudflare:llama-8b",
+      "provider": "cloudflare",
+      "upstreamModel": "@cf/meta/llama-3.1-8b-instruct-fast",
+      "tier": "fast",
+      "capabilities": ["text"],
+      "contextWindow": 128000,
+      "maxOutputTokens": 4096,
+      "latencyClass": "fast",
+      "qualityScore": 0.6,
+      "resetTimezone": "UTC",
+      "quotas": { "rpm": 300, "tpm": 120000, "rpd": 10000, "tpd": 1000000, "tpmonth": 0 }
+    },
+    {
+      "key": "github:gpt-4o",
+      "provider": "github",
+      "upstreamModel": "openai/gpt-4o",
+      "tier": "flagship",
+      "capabilities": ["text", "vision"],
+      "contextWindow": 128000,
+      "maxOutputTokens": 8192,
+      "latencyClass": "standard",
+      "qualityScore": 0.92,
+      "resetTimezone": "UTC",
+      "quotas": { "rpm": 10, "tpm": 8000, "rpd": 50, "tpd": 100000, "tpmonth": 0 }
+    },
+    {
+      "key": "github:gpt-4o-mini",
+      "provider": "github",
+      "upstreamModel": "openai/gpt-4o-mini",
+      "tier": "fast",
+      "capabilities": ["text", "vision"],
+      "contextWindow": 128000,
+      "maxOutputTokens": 8192,
+      "latencyClass": "fast",
+      "qualityScore": 0.74,
+      "resetTimezone": "UTC",
+      "quotas": { "rpm": 15, "tpm": 8000, "rpd": 150, "tpd": 200000, "tpmonth": 0 }
+    },
+    {
+      "key": "mock:general",
+      "provider": "mock",
+      "upstreamModel": "konkred-mock-general",
+      "tier": "fallback",
+      "capabilities": ["text", "vision", "audio", "document", "code", "reasoning"],
+      "contextWindow": 1000000,
+      "maxOutputTokens": 8192,
+      "latencyClass": "turbo",
+      "qualityScore": 0.2,
+      "resetTimezone": "UTC",
+      "quotas": { "rpm": 600, "tpm": 1000000, "rpd": 100000, "tpd": 50000000, "tpmonth": 0 }
+    },
+    {
+      "key": "mock:fast",
+      "provider": "mock",
+      "upstreamModel": "konkred-mock-fast",
+      "tier": "fallback",
+      "capabilities": ["text", "vision", "audio", "document", "code", "reasoning"],
+      "contextWindow": 1000000,
+      "maxOutputTokens": 4096,
+      "latencyClass": "turbo",
+      "qualityScore": 0.15,
+      "resetTimezone": "UTC",
+      "quotas": { "rpm": 600, "tpm": 1000000, "rpd": 100000, "tpd": 50000000, "tpmonth": 0 }
+    }
+  ]
+}
