@@ -366,6 +366,35 @@ jobs:
               print(f"{path}: valid YAML")
           PY
 
+      - name: Build contexts exclude secrets and caches
+        run: |
+          for ctx in bots gateway; do
+            test -f "$ctx/.dockerignore" || { echo "::error::$ctx/.dockerignore is missing"; exit 1; }
+            for pat in '.env' '.git/'; do
+              grep -qF "$pat" "$ctx/.dockerignore" \
+                || { echo "::error::$ctx/.dockerignore does not exclude $pat"; exit 1; }
+            done
+            echo "$ctx/.dockerignore ok"
+          done
+          # __pycache__ must never reach the Python image.
+          grep -q '__pycache__' bots/.dockerignore \
+            || { echo "::error::bots/.dockerignore does not exclude __pycache__"; exit 1; }
+          # The watchdog's generated state must never be baked into a layer.
+          grep -q 'runtime.state.json' gateway/.dockerignore \
+            || { echo "::error::gateway/.dockerignore does not exclude runtime.state.json"; exit 1; }
+
+      - name: The gateway must stay dependency-free
+        run: |
+          node -e "
+          const p = require('./gateway/package.json');
+          const deps = Object.keys(p.dependencies || {});
+          if (deps.length) {
+            console.error('::error::unexpected runtime dependencies: ' + deps.join(', '));
+            process.exit(1);
+          }
+          console.log('zero runtime dependencies confirmed');
+          "
+
       - name: setup.sh must be executable and syntactically valid
         run: |
           test -x setup.sh || { echo "::error::setup.sh is not executable"; exit 1; }

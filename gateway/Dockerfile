@@ -19,9 +19,13 @@ WORKDIR /app
 
 # Copy the manifest first so this layer caches independently of the sources.
 COPY package.json ./
-# `npm ci` requires a lockfile; with zero dependencies `--omit=dev` is enough
-# and keeps the image free of a node_modules directory entirely.
-RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
+# There are deliberately zero runtime dependencies, so there is nothing to
+# install - no npm registry round-trip, no node_modules, no lockfile drift.
+# Assert that stays true rather than silently shipping an unvetted dependency.
+RUN node -e "const p=require('./package.json'); \
+    const d=Object.keys(p.dependencies||{}); \
+    if(d.length){console.error('unexpected runtime dependencies: '+d.join(', '));process.exit(1);} \
+    console.log('zero runtime dependencies confirmed');"
 
 COPY src ./src
 COPY data ./data

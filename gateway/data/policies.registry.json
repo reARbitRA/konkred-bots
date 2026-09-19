@@ -303,13 +303,12 @@
     {
       "key": "openrouter:free-auto",
       "provider": "openrouter",
-      "upstreamModel": "deepseek/deepseek-chat-v3.1:free",
+      "upstreamModel": "openrouter/free",
       "tier": "balanced",
       "capabilities": [
-        "text",
-        "reasoning"
+        "text"
       ],
-      "contextWindow": 163840,
+      "contextWindow": 65536,
       "maxOutputTokens": 8192,
       "latencyClass": "slow",
       "qualityScore": 0.8,

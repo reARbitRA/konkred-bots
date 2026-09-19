@@ -1,0 +1,44 @@
+# Keep the build context small and never bake secrets or caches into a layer.
+
+# --- Secrets -----------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Python bytecode / caches ------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Virtualenvs (never reuse the host's) ------------------------------------
+.venv/
+venv/
+env/
+ENV/
+
+# --- VCS / editors / OS ------------------------------------------------------
+.git/
+.gitignore
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# --- Build output / logs -----------------------------------------------------
+build/
+dist/
+*.log
+logs/
+tmp/
+
+# --- Docs (not needed at runtime) --------------------------------------------
+README.md

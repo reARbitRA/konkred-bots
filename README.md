@@ -162,7 +162,7 @@ free-tier limits of **16 model slots across 8 providers**:
 | Groq | `gpt-oss-120b`, `gpt-oss-20b`, `qwen3-27b` |
 | Cerebras | `gpt-oss-120b`, `llama-8b`, `qwen3-235b` |
 | Mistral | `small`, `codestral` |
-| OpenRouter | `free-auto` |
+| OpenRouter | `free-auto` — their auto-router over whatever is free today |
 | Cloudflare | `llama-8b` |
 | GitHub Models | `gpt-4o`, `gpt-4o-mini` |
 | Mock | `general`, `fast` |
@@ -454,7 +454,7 @@ CI runs four jobs on every push and pull request:
 | **gateway** | registry is valid, every routed model still exists in it, every `.mjs` parses, the full import graph resolves, 51 unit tests pass, and a live server answers health/models/meta/inference, rejects a bad admin key with `401`, accepts the real one with `200`, and rejects a malformed body with `400` |
 | **bots** | every module byte-compiles, flake8 is clean, routers and command menus line up with `BOT_SPECS` and every router has handlers, the message splitter holds its invariants over 300 randomised cases, and history + FSM namespaces are proven isolated on fakeredis |
 | **integration** | the real `GatewayClient` drives a real gateway over HTTP across every task route the bots use, including multimodal audio parts and JSON mode, and the rate limiter produces a correctly typed, user-presentable error |
-| **compose** | `docker compose config` validates, the service list is exactly `bot gateway redis`, every YAML manifest parses, and `setup.sh` is executable and passes `bash -n` plus shellcheck |
+| **compose** | `docker compose config` validates, the service list is exactly `bot gateway redis`, every YAML manifest parses, both build contexts exclude secrets/caches, the gateway is still dependency-free, and `setup.sh` is executable and passes `bash -n` plus shellcheck |
 
 ---
 
@@ -542,6 +542,7 @@ konkred-bots/
 │
 ├── gateway/                    Node 20 · ESM · zero dependencies
 │   ├── Dockerfile              node:20-alpine, non-root, HEALTHCHECK
+│   ├── .dockerignore           keeps secrets, tests and caches out of the image
 │   ├── data/
 │   │   └── policies.registry.json   16 model slots across 8 providers
 │   ├── src/
@@ -558,6 +559,7 @@ konkred-bots/
 │
 └── bots/                       Python 3.11 · Aiogram 3.15
     ├── Dockerfile              multi-stage, non-root, tini
+    ├── .dockerignore           keeps secrets and __pycache__ out of the image
     ├── main.py                 orchestrator: N bots, one event loop
     ├── requirements.txt
     ├── shared/                 config · gateway_client · history · utils
