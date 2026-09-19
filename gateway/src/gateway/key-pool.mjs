@@ -232,8 +232,11 @@ export class KeySlot {
       }
       case 'safety_block':
       case 'context_length':
-      case 'bad_request': {
+      case 'bad_request':
+      case 'model_unavailable': {
         // Not the credential's fault - the router benches the *model*, not the key.
+        // A retired model id in particular says nothing about the API key, which
+        // must stay fully available for every other model on that provider.
         this.consecutiveErrors = Math.max(0, this.consecutiveErrors - 1);
         break;
       }

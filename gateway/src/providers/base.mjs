@@ -16,6 +16,13 @@ export const ERROR_CLASS = Object.freeze({
   CONTEXT_LENGTH: 'context_length',
   SAFETY_BLOCK: 'safety_block',
   BAD_REQUEST: 'bad_request',
+  /**
+   * The upstream no longer serves this model id (retired, renamed, or not
+   * available to this account). Distinct from BAD_REQUEST because the request
+   * itself is fine - only this candidate is unusable, so the chain must keep
+   * going and the model should be benched rather than retried.
+   */
+  MODEL_UNAVAILABLE: 'model_unavailable',
   SERVER: 'server',
   TIMEOUT: 'timeout',
   NETWORK: 'network',
@@ -117,6 +124,16 @@ export function classifyHttpError(status, bodyText = '') {
     }
     if (body.includes('api key') || body.includes('unauthorized') || body.includes('permission')) {
       return ERROR_CLASS.AUTH;
+    }
+    // Providers retire model ids on a rolling schedule. That must degrade to
+    // "skip this candidate", never "abort the request" - otherwise a single
+    // stale entry in the registry takes down every task routed through it.
+    if (body.includes('decommission') || body.includes('model_not_found')
+      || body.includes('model not found') || body.includes('does not exist')
+      || body.includes('no longer supported') || body.includes('has been deprecated')
+      || body.includes('unknown model') || body.includes('invalid model')
+      || body.includes('unsupported model') || body.includes('model_terminated')) {
+      return ERROR_CLASS.MODEL_UNAVAILABLE;
     }
     return ERROR_CLASS.BAD_REQUEST;
   }

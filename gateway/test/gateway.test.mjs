@@ -197,32 +197,32 @@ test('parseDotEnv and collectKeys handle pools, quotes and comments', () => {
 test('policy store loads every specified model key', () => {
   const { store } = makeStore({});
   const expected = [
-    'gemini:flash', 'gemini:flash-lite', 'groq:gpt-oss-120b', 'groq:llama-70b', 'groq:llama-8b',
-    'groq:qwen3-32b', 'groq:kimi-k2', 'groq:llama-4-scout', 'cerebras:gpt-oss-120b', 'cerebras:llama-8b',
+    'gemini:flash', 'gemini:flash-lite', 'groq:gpt-oss-120b', 'groq:qwen3-27b', 'groq:gpt-oss-20b',
+    'cerebras:gpt-oss-120b', 'cerebras:llama-8b',
     'cerebras:qwen3-235b', 'mistral:small', 'mistral:codestral', 'openrouter:free-auto',
     'cloudflare:llama-8b', 'github:gpt-4o', 'github:gpt-4o-mini', 'mock:general', 'mock:fast',
   ];
   for (const key of expected) assert.ok(store.has(key), `missing ${key}`);
   assert.equal(store.get('gemini:flash').resetTimezone, 'America/Los_Angeles');
-  assert.equal(store.get('groq:llama-70b').resetTimezone, 'UTC');
+  assert.equal(store.get('groq:qwen3-27b').resetTimezone, 'UTC');
   assert.equal(store.get('gemini:flash').contextWindow, 1048576);
 });
 
 test('availability follows credential presence', () => {
   const { store } = makeStore({});
-  assert.equal(store.isAvailable('groq:llama-70b'), false);
+  assert.equal(store.isAvailable('groq:qwen3-27b'), false);
   assert.equal(store.isAvailable('mock:general'), true);
   const { store: withGroq } = makeStore({ groq: ['gsk_test'] });
-  assert.equal(withGroq.isAvailable('groq:llama-70b'), true);
+  assert.equal(withGroq.isAvailable('groq:qwen3-27b'), true);
 });
 
 test('calibrate only shrinks quotas', () => {
   const { store } = makeStore({});
-  const before = store.get('groq:llama-8b').quotas.rpm;
-  store.calibrate('groq:llama-8b', { rpm: before + 100 });
-  assert.equal(store.get('groq:llama-8b').quotas.rpm, before, 'never grows');
-  store.calibrate('groq:llama-8b', { rpm: 5 });
-  assert.equal(store.get('groq:llama-8b').quotas.rpm, 5);
+  const before = store.get('groq:gpt-oss-20b').quotas.rpm;
+  store.calibrate('groq:gpt-oss-20b', { rpm: before + 100 });
+  assert.equal(store.get('groq:gpt-oss-20b').quotas.rpm, before, 'never grows');
+  store.calibrate('groq:gpt-oss-20b', { rpm: 5 });
+  assert.equal(store.get('groq:gpt-oss-20b').quotas.rpm, 5);
 });
 
 /* ------------------------------------------------------------------ cache */
@@ -313,7 +313,7 @@ test('dedup TTL timer force-evicts a hung call and is unref-ed', async () => {
 
 test('key slot enforces RPM headroom (85% of the published limit)', () => {
   const { store } = makeStore({ groq: ['k1'] });
-  const policy = store.get('groq:llama-70b'); // rpm 30 -> effective 25
+  const policy = store.get('groq:qwen3-27b'); // rpm 30 -> effective 25
   const slot = new KeySlot({ policy, credential: 'k1', credentialSource: 'T', headroom: baseConfig.headroom });
   assert.equal(slot.effective('rpm'), 25);
   for (let i = 0; i < 25; i += 1) {
@@ -329,7 +329,7 @@ test('key slot enforces RPM headroom (85% of the published limit)', () => {
 test('sliding 60s window releases capacity as samples age out', () => {
   const { store } = makeStore({ groq: ['k1'] });
   const slot = new KeySlot({
-    policy: store.get('groq:llama-70b'), credential: 'k1', credentialSource: 'T', headroom: baseConfig.headroom,
+    policy: store.get('groq:qwen3-27b'), credential: 'k1', credentialSource: 'T', headroom: baseConfig.headroom,
   });
   const t0 = Date.now();
   for (let i = 0; i < 25; i += 1) slot.recordSuccess({ tokens: 1, nowMs: t0 });
@@ -340,10 +340,10 @@ test('sliding 60s window releases capacity as samples age out', () => {
 
 test('TPM headroom blocks oversized bursts', () => {
   const { store } = makeStore({ groq: ['k1'] });
-  const policy = store.get('groq:llama-70b'); // tpm 12000 -> effective 10800
+  const policy = store.get('groq:qwen3-27b'); // tpm 8000 -> effective 7200
   const slot = new KeySlot({ policy, credential: 'k1', credentialSource: 'T', headroom: baseConfig.headroom });
-  assert.equal(slot.effective('tpm'), 10800);
-  slot.recordSuccess({ tokens: 10000 });
+  assert.equal(slot.effective('tpm'), 7200); // 8000 * 0.90
+  slot.recordSuccess({ tokens: 7000 });
   const verdict = slot.canServe(1000);
   assert.equal(verdict.ok, false);
   assert.equal(verdict.reason, 'tpm');
@@ -368,7 +368,7 @@ test('daily counters reset at midnight in the model timezone', () => {
 test('429 applies exponential cooldown, auth disables the slot permanently', () => {
   const { store } = makeStore({ groq: ['k1'] });
   const slot = new KeySlot({
-    policy: store.get('groq:llama-8b'), credential: 'k1', credentialSource: 'T', headroom: baseConfig.headroom,
+    policy: store.get('groq:gpt-oss-20b'), credential: 'k1', credentialSource: 'T', headroom: baseConfig.headroom,
   });
   slot.recordFailure('rate_limit', {});
   assert.equal(slot.isCoolingDown(), true);
@@ -388,10 +388,10 @@ test('429 applies exponential cooldown, auth disables the slot permanently', () 
 test('key pool spreads load across credentials and skips saturated slots', () => {
   const { config, store } = makeStore({ groq: ['k1', 'k2', 'k3'] });
   const pool = new KeyPool({ policyStore: store, config });
-  assert.equal(pool.slotsFor('groq:llama-70b').length, 3);
+  assert.equal(pool.slotsFor('groq:qwen3-27b').length, 3);
   const used = new Set();
   for (let i = 0; i < 3; i += 1) {
-    const { slot } = pool.acquire('groq:llama-70b', 10);
+    const { slot } = pool.acquire('groq:qwen3-27b', 10);
     assert.ok(slot, 'slot acquired');
     slot.release();
     slot.recordSuccess({ tokens: 10 });
@@ -399,8 +399,8 @@ test('key pool spreads load across credentials and skips saturated slots', () =>
   }
   assert.equal(used.size, 3, 'round-robin touched every credential');
 
-  for (const slot of pool.slotsFor('groq:llama-70b')) slot.recordFailure('rate_limit', {});
-  const blocked = pool.acquire('groq:llama-70b', 10);
+  for (const slot of pool.slotsFor('groq:qwen3-27b')) slot.recordFailure('rate_limit', {});
+  const blocked = pool.acquire('groq:qwen3-27b', 10);
   assert.equal(blocked.slot, undefined);
   assert.equal(blocked.reason, 'cooldown');
   assert.ok(blocked.retryAfterMs > 0);
@@ -411,7 +411,7 @@ test('provider bench removes every slot of that provider', () => {
   const pool = new KeyPool({ policyStore: store, config });
   pool.benchProvider('groq', 30000, 'server-errors');
   assert.equal(pool.isProviderBenched('groq'), true);
-  assert.equal(pool.acquire('groq:llama-70b', 10).reason, 'provider-benched');
+  assert.equal(pool.acquire('groq:qwen3-27b', 10).reason, 'provider-benched');
 });
 
 /* ----------------------------------------------------------------- router */
@@ -538,7 +538,7 @@ test('auth failure disables the credential for subsequent requests', async () =>
   ]);
   const engine = new FallbackEngine({ policyStore: store, keyPool, router, providers, config });
   await engine.execute({ taskType: 'general', messages: [{ role: 'user', content: 'a' }], maxTokens: 50 });
-  for (const slot of keyPool.slotsFor('groq:llama-70b')) {
+  for (const slot of keyPool.slotsFor('groq:qwen3-27b')) {
     assert.equal(slot.isDisabled(), true, 'credential disabled after 401');
   }
 });
@@ -579,7 +579,7 @@ test('safety block benches the model family', async () => {
   const engine = new FallbackEngine({ policyStore: store, keyPool, router, providers, config });
   const result = await engine.execute({ taskType: 'general', messages: [{ role: 'user', content: 'q' }], maxTokens: 50 });
   assert.equal(result.provider, 'gemini');
-  assert.ok(router.isBenched('groq:llama-70b'), 'model benched after a safety block');
+  assert.ok(router.isBenched('groq:qwen3-27b'), 'model benched after a safety block');
 });
 
 test('bad_request aborts immediately without burning the chain', async () => {
@@ -772,7 +772,7 @@ test('provider adapters speak their real wire formats against a stub server', as
   // --- OpenAI-compatible (Groq) ---
   const groq = new OpenAICompatProvider({ name: 'groq', variant: 'groq', providerConfig: { baseUrl: base }, timeoutMs: 4000 });
   const groqResult = await groq.complete({
-    policy: store.get('groq:llama-70b'),
+    policy: store.get('groq:qwen3-27b'),
     credential: 'k1',
     messages: [{ role: 'user', content: 'hi' }],
     system: 'be brief',
@@ -780,7 +780,7 @@ test('provider adapters speak their real wire formats against a stub server', as
     maxTokens: 100,
   });
   assert.equal(groqResult.text, 'openai-compatible says hi');
-  const groqCall = received.find((entry) => entry.body.model === 'llama-3.3-70b-versatile');
+  const groqCall = received.find((entry) => entry.body.model === 'qwen/qwen3.6-27b');
   assert.equal(groqCall.headers.authorization, 'Bearer k1');
   assert.equal(groqCall.body.messages[0].role, 'system');
   assert.equal(groqCall.body.max_completion_tokens, 100, 'groq uses max_completion_tokens');
@@ -788,7 +788,7 @@ test('provider adapters speak their real wire formats against a stub server', as
   // --- 429 mapping with Retry-After ---
   await assert.rejects(
     () => groq.complete({
-      policy: { ...store.get('groq:llama-70b'), upstreamModel: 'rate-limited' },
+      policy: { ...store.get('groq:qwen3-27b'), upstreamModel: 'rate-limited' },
       credential: 'k1',
       messages: [{ role: 'user', content: 'hi' }],
       maxTokens: 10,
@@ -804,7 +804,7 @@ test('provider adapters speak their real wire formats against a stub server', as
   // --- empty completion + content_filter -> safety_block ---
   await assert.rejects(
     () => groq.complete({
-      policy: { ...store.get('groq:llama-70b'), upstreamModel: 'blocked' },
+      policy: { ...store.get('groq:qwen3-27b'), upstreamModel: 'blocked' },
       credential: 'k1',
       messages: [{ role: 'user', content: 'hi' }],
       maxTokens: 10,
@@ -896,7 +896,7 @@ test('watchdog prunes state and calibrates an over-optimistic quota', () => {
   const gateway = new Gateway({ config, policyStore: store });
   const watchdog = new QuotaWatchdog({ gateway, config });
 
-  const slot = gateway.keyPool.slotsFor('groq:llama-70b')[0];
+  const slot = gateway.keyPool.slotsFor('groq:qwen3-27b')[0];
   slot.totals.rateLimits = 4;
   for (let i = 0; i < 5; i += 1) slot.recordSuccess({ tokens: 10 });
 
@@ -977,4 +977,80 @@ test('HTTP 429 carries a retry-after header and never double-writes', async (t) 
 
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(rejections, [], 'no unhandled rejection should escape the 429 path');
+});
+
+test('every routed model exists in the registry (no stale ids)', async () => {
+  // Guard: providers retire model ids on a rolling schedule, and TASK_ROUTES is
+  // maintained by hand. A route pointing at a key the registry no longer has
+  // would silently shrink the fallback chain, so fail loudly instead.
+  const { TASK_ROUTES, TASK_TYPES } = await import('../src/gateway/router.mjs');
+  const store = new PolicyStore({ registryPath: baseConfig.registryPath, config: baseConfig });
+  const known = new Set(store.describe().map((m) => m.key));
+
+  for (const task of TASK_TYPES) {
+    const chain = TASK_ROUTES[task];
+    assert.ok(Array.isArray(chain) && chain.length > 0, `${task} has no candidate chain`);
+
+    const unknown = chain.filter((key) => !known.has(key));
+    assert.deepEqual(unknown, [], `${task} routes to unknown model(s): ${unknown.join(', ')}`);
+
+    const duplicates = chain.filter((key, i) => chain.indexOf(key) !== i);
+    assert.deepEqual(duplicates, [], `${task} lists duplicate model(s): ${duplicates.join(', ')}`);
+
+    assert.ok(
+      chain.some((key) => key.startsWith('mock:')),
+      `${task} must end in a mock so the chain can always terminate`,
+    );
+  }
+
+  // Conversely, every non-mock model should be reachable from some task chain,
+  // otherwise it is dead weight in the registry.
+  const routed = new Set(Object.values(TASK_ROUTES).flat());
+  const orphans = [...known].filter((key) => !key.startsWith('mock:') && !routed.has(key));
+  assert.deepEqual(orphans, [], `registry models never routed: ${orphans.join(', ')}`);
+});
+
+test('a retired upstream model id is skipped, not fatal', async () => {
+  // Regression: a decommissioned model returns HTTP 400/404, which classified
+  // as `bad_request` -> recovery action `abort`. One stale registry entry could
+  // therefore kill an entire request instead of falling through to the next
+  // candidate.
+  const { classifyHttpError, ERROR_CLASS } = await import('../src/providers/base.mjs');
+  const { RECOVERY_ACTIONS } = await import('../src/gateway/fallback.mjs');
+
+  const realBodies = [
+    // Groq
+    '{"error":{"message":"The model `llama-3.3-70b-versatile` has been decommissioned and is no longer supported.","code":"model_decommissioned"}}',
+    // OpenAI-compatible
+    '{"error":{"message":"The model `gpt-4o` does not exist or you do not have access to it.","code":"model_not_found"}}',
+    // Generic phrasings
+    '{"error":{"message":"Unknown model: foo"}}',
+    '{"error":{"message":"invalid model specified"}}',
+  ];
+
+  for (const body of realBodies) {
+    for (const status of [400, 404]) {
+      const cls = classifyHttpError(status, body);
+      assert.equal(cls, ERROR_CLASS.MODEL_UNAVAILABLE, `${status} ${body.slice(0, 40)} -> ${cls}`);
+      assert.notEqual(RECOVERY_ACTIONS[cls], 'abort', 'a retired model must never abort the chain');
+      assert.equal(RECOVERY_ACTIONS[cls], 'bench-model');
+    }
+  }
+
+  // A genuinely malformed request must still abort rather than burn the chain.
+  const malformed = classifyHttpError(400, '{"error":{"message":"messages: field required"}}');
+  assert.equal(malformed, ERROR_CLASS.BAD_REQUEST);
+  assert.equal(RECOVERY_ACTIONS[malformed], 'abort');
+
+  // And the credential must not be punished for a dead model id.
+  const slot = new KeySlot({
+    policy: {
+      key: 'groq:dead', provider: 'groq', upstreamModel: 'dead', contextWindow: 1000,
+      quotas: { rpm: 10, tpm: 1000, rpd: 100, tpd: 10000 },
+    },
+    credential: 'k', credentialSource: 'TEST', headroom: baseConfig.headroom,
+  });
+  slot.recordFailure(ERROR_CLASS.MODEL_UNAVAILABLE, { message: 'decommissioned' });
+  assert.equal(slot.cooldownUntil ?? 0, 0, 'the key must not be cooled down for a dead model');
+  assert.notEqual(slot.disabledUntil, Infinity, 'the key must not be disabled for a dead model');
 });

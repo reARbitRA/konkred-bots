@@ -26,6 +26,9 @@ export const RECOVERY_ACTIONS = Object.freeze({
   [ERROR_CLASS.AUTH]: 'disable-slot',
   [ERROR_CLASS.CONTEXT_LENGTH]: 'raise-context',
   [ERROR_CLASS.SAFETY_BLOCK]: 'bench-model',
+  // A retired/unknown model id is a permanent property of that candidate, not
+  // of the request: bench the model hard and move to the next one.
+  [ERROR_CLASS.MODEL_UNAVAILABLE]: 'bench-model',
   [ERROR_CLASS.SERVER]: 'bench-provider',
   [ERROR_CLASS.TIMEOUT]: 'bench-provider',
   [ERROR_CLASS.NETWORK]: 'bench-provider',
@@ -89,11 +92,23 @@ export class FallbackEngine {
         });
         break;
       }
-      case 'bench-model':
-        slot?.recordFailure(ERROR_CLASS.SAFETY_BLOCK, { message: error.message });
-        this.router.benchModel(modelKey, 5 * 60 * 1000, 'safety-block');
+      case 'bench-model': {
+        // A safety block is transient (this prompt, this moment); a retired
+        // model id is permanent until the registry is updated, so bench it for
+        // the rest of the process lifetime rather than retrying every 5 min.
+        const permanent = errorClass === ERROR_CLASS.MODEL_UNAVAILABLE;
+        const benchMs = permanent ? 24 * 60 * 60 * 1000 : 5 * 60 * 1000;
+        slot?.recordFailure(errorClass, { message: error.message });
+        this.router.benchModel(modelKey, benchMs, permanent ? 'model-unavailable' : 'safety-block');
+        if (permanent) {
+          log.error('model id rejected by upstream - benching it for 24h; update the registry', {
+            model: modelKey,
+            message: String(error.message ?? '').slice(0, 300),
+          });
+        }
         state.remaining = state.remaining.filter((key) => key !== modelKey);
         break;
+      }
       case 'bench-provider': {
         slot?.recordFailure(errorClass, { message: error.message });
         const provider = policy?.provider;

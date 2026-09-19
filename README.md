@@ -107,7 +107,7 @@ and waits for the gateway to report healthy.
 
 ```bash
 curl localhost:3000/api/health     # status, ready slots, cache stats
-curl localhost:3000/api/models     # 19 model slots, 8 task types
+curl localhost:3000/api/models     # 16 model slots, 8 task types
 docker compose logs -f bot         # watch the bots poll Telegram
 ```
 
@@ -153,13 +153,13 @@ no SDKs. Roughly 5,000 lines across eight focused modules.
 
 #### Quota registry
 
-`gateway/data/policies.registry.json` (version `2026.02.1`) encodes the published
-free-tier limits of **19 model slots across 8 providers**:
+`gateway/data/policies.registry.json` (version `2026.09.1`) encodes the published
+free-tier limits of **16 model slots across 8 providers**:
 
 | Provider | Models |
 |---|---|
 | Gemini | `flash`, `flash-lite` |
-| Groq | `gpt-oss-120b`, `llama-70b`, `llama-8b`, `qwen3-32b`, `kimi-k2`, `llama-4-scout` |
+| Groq | `gpt-oss-120b`, `gpt-oss-20b`, `qwen3-27b` |
 | Cerebras | `gpt-oss-120b`, `llama-8b`, `qwen3-235b` |
 | Mistral | `small`, `codestral` |
 | OpenRouter | `free-auto` |
@@ -169,7 +169,16 @@ free-tier limits of **19 model slots across 8 providers**:
 
 Every entry declares RPM, TPM, RPD and TPD, a context window, and capability
 flags (multimodal, JSON mode, tool use). CI validates the registry on every push:
-no duplicate keys, no missing fields, no references to unknown providers.
+no duplicate keys, no missing fields, no references to unknown providers, and —
+importantly — no task route pointing at a model the registry no longer contains.
+
+> **Model ids drift.** Providers retire model names on a rolling schedule (Groq
+> alone retired five of the ids this registry originally shipped with). The
+> gateway is built to survive that: an upstream that answers "this model has
+> been decommissioned" is classified `model_unavailable`, the model is benched
+> for 24h, and the request **transparently continues to the next candidate**
+> rather than failing. The log line tells you which entry to update. Refresh the
+> registry against each provider's docs every few months.
 
 #### Key pool
 
@@ -213,8 +222,10 @@ Every failure is classified, and each class has a distinct recovery:
 | `rate_limit` | cool the slot down, try the next candidate |
 | `auth` | disable the slot for the process lifetime |
 | `context_length` | raise the context requirement and re-plan |
-| `safety_block` | bench that specific model |
+| `safety_block` | bench that specific model for 5 minutes |
+| `model_unavailable` | retired/unknown model id — bench it for 24h, keep the credential healthy |
 | `server` / `timeout` | bench the whole provider, with strikes |
+| `bad_request` | abort — the request itself is malformed, so retrying wastes quota |
 
 Empty completions are not silently returned: a response with a `SAFETY`,
 `RECITATION`, `BLOCKLIST` or `content_filter` finish reason raises a typed error
@@ -423,7 +434,7 @@ provider — no outbound network calls at all, which is exactly what CI uses.
 ## Testing
 
 ```bash
-# Gateway — 49 tests, ~1.9s
+# Gateway — 51 tests, ~1.9s
 cd gateway && node --test test/*.test.mjs
 
 # Bots — compile + lint
@@ -440,7 +451,7 @@ CI runs four jobs on every push and pull request:
 
 | Job | What it proves |
 |---|---|
-| **gateway** | registry is valid, every `.mjs` parses, the full import graph resolves, 49 unit tests pass, and a live server answers health/models/meta/inference, rejects a bad admin key with `401`, accepts the real one with `200`, and rejects a malformed body with `400` |
+| **gateway** | registry is valid, every routed model still exists in it, every `.mjs` parses, the full import graph resolves, 51 unit tests pass, and a live server answers health/models/meta/inference, rejects a bad admin key with `401`, accepts the real one with `200`, and rejects a malformed body with `400` |
 | **bots** | every module byte-compiles, flake8 is clean, routers and command menus line up with `BOT_SPECS` and every router has handlers, the message splitter holds its invariants over 300 randomised cases, and history + FSM namespaces are proven isolated on fakeredis |
 | **integration** | the real `GatewayClient` drives a real gateway over HTTP across every task route the bots use, including multimodal audio parts and JSON mode, and the rate limiter produces a correctly typed, user-presentable error |
 | **compose** | `docker compose config` validates, the service list is exactly `bot gateway redis`, every YAML manifest parses, and `setup.sh` is executable and passes `bash -n` plus shellcheck |
@@ -532,7 +543,7 @@ konkred-bots/
 ├── gateway/                    Node 20 · ESM · zero dependencies
 │   ├── Dockerfile              node:20-alpine, non-root, HEALTHCHECK
 │   ├── data/
-│   │   └── policies.registry.json   19 model slots across 8 providers
+│   │   └── policies.registry.json   16 model slots across 8 providers
 │   ├── src/
 │   │   ├── server.mjs          native node:http routing
 │   │   ├── config.mjs          env loading, credential discovery
@@ -543,7 +554,7 @@ konkred-bots/
 │   │   ├── providers/          gemini · openai-compat · cloudflare · mock
 │   │   └── gateway/            cache · dedup · key-pool · router
 │   │                           fallback · user-limiter · fusion
-│   └── test/gateway.test.mjs   49 tests
+│   └── test/gateway.test.mjs   51 tests
 │
 └── bots/                       Python 3.11 · Aiogram 3.15
     ├── Dockerfile              multi-stage, non-root, tini
