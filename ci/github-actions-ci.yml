@@ -1,0 +1,378 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'feat/**', 'fix/**', 'arena/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ===========================================================================
+  # Gateway: ESM syntax, unit tests and a live smoke test of the HTTP surface
+  # ===========================================================================
+  gateway:
+    name: Gateway (Node 20)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gateway
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate the quota registry
+        run: |
+          cat > /tmp/check-registry.mjs <<'EOF'
+          import { readFileSync } from 'node:fs';
+
+          const registry = JSON.parse(readFileSync('./data/policies.registry.json', 'utf8'));
+          const models = registry.models;
+
+          if (!Array.isArray(models) || models.length === 0) {
+            throw new Error('registry contains no models');
+          }
+
+          const keys = models.map((m) => m.key);
+          if (new Set(keys).size !== keys.length) {
+            throw new Error('duplicate model keys in registry');
+          }
+
+          const required = ['key', 'provider', 'upstreamModel', 'contextWindow', 'quotas'];
+          for (const model of models) {
+            for (const field of required) {
+              if (model[field] === undefined) {
+                throw new Error(`${model.key}: missing field "${field}"`);
+              }
+            }
+            if (!Number.isFinite(model.contextWindow) || model.contextWindow <= 0) {
+              throw new Error(`${model.key}: invalid contextWindow`);
+            }
+            if (!registry.providers?.[model.provider]) {
+              throw new Error(`${model.key}: references unknown provider "${model.provider}"`);
+            }
+          }
+
+          console.log(`registry ${registry.version}: ${models.length} models, ` +
+                      `${Object.keys(registry.providers).length} providers`);
+          EOF
+          node /tmp/check-registry.mjs
+
+      - name: Check ESM syntax of every source file
+        run: |
+          fail=0
+          while IFS= read -r file; do
+            if ! node --check "$file"; then
+              echo "::error file=gateway/$file::syntax error"
+              fail=1
+            fi
+          done < <(find src test -name '*.mjs')
+          exit $fail
+
+      - name: Verify the full ESM import graph resolves
+        run: node -e "import('./src/server.mjs').then(() => console.log('import graph ok'))"
+        env:
+          MOCK_ONLY: 'true'
+
+      - name: Unit tests
+        run: node --test test/*.test.mjs
+
+      - name: Smoke test the live HTTP surface
+        env:
+          MOCK_ONLY: 'true'
+          ADMIN_KEY: ci-admin-key
+          PORT: '3000'
+        run: |
+          node src/server.mjs &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+          echo "--- health ---"
+          curl -fsS http://127.0.0.1:3000/api/health | head -c 200; echo
+          echo "--- models ---"
+          curl -fsS http://127.0.0.1:3000/api/models >/dev/null && echo ok
+          echo "--- meta ---"
+          curl -fsS http://127.0.0.1:3000/api/meta >/dev/null && echo ok
+
+          echo "--- inference ---"
+          body=$(curl -fsS -X POST http://127.0.0.1:3000/api/ai \
+            -H 'content-type: application/json' \
+            -d '{"taskType":"general","userId":"ci","messages":[{"role":"user","content":"ci smoke test"}]}')
+          echo "$body" | head -c 200; echo
+          echo "$body" | grep -q '"text"' || { echo "::error::no text in response"; exit 1; }
+
+          echo "--- admin auth must reject a bad key ---"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H 'x-admin-key: wrong' \
+            http://127.0.0.1:3000/api/admin/dashboard)
+          [ "$code" = "401" ] || { echo "::error::expected 401, got $code"; exit 1; }
+
+          echo "--- admin auth must accept the real key ---"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H 'x-admin-key: ci-admin-key' \
+            http://127.0.0.1:3000/api/admin/dashboard)
+          [ "$code" = "200" ] || { echo "::error::expected 200, got $code"; exit 1; }
+
+          echo "--- malformed body must be rejected ---"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3000/api/ai \
+            -H 'content-type: application/json' -d '{"messages":[]}')
+          [ "$code" = "400" ] || { echo "::error::expected 400, got $code"; exit 1; }
+
+          echo "all gateway smoke tests passed"
+
+  # ===========================================================================
+  # Bots: byte-compilation, flake8 and an import/handler wiring check
+  # ===========================================================================
+  bots:
+    name: Bots (Python 3.11)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bots
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: bots/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flake8 fakeredis
+
+      - name: Byte-compile every module
+        run: python -m compileall -q .
+
+      - name: flake8
+        run: python -m flake8 .
+
+      - name: Import graph and handler wiring
+        run: |
+          python - <<'PY'
+          import main
+          from shared.config import BOT_SPECS
+
+          # Every declared bot must have a router and a command menu.
+          assert set(main.ROUTERS) == {s.key for s in BOT_SPECS}, "ROUTERS/BOT_SPECS mismatch"
+          assert set(main.COMMANDS) == {s.key for s in BOT_SPECS}, "COMMANDS/BOT_SPECS mismatch"
+
+          # Every router must actually carry handlers.
+          for key, router in main.ROUTERS.items():
+              handlers = len(router.message.handlers) + len(router.callback_query.handlers)
+              assert handlers > 0, f"{key} router has no handlers"
+              print(f"{key:8s} {handlers} handler(s)")
+          print("wiring ok")
+          PY
+
+      - name: Telegram message splitter invariants
+        run: |
+          python - <<'PY'
+          import random, string
+          from shared.utils import split_telegram_message
+
+          random.seed(1337)
+          for _ in range(300):
+              limit = random.choice([20, 200, 1000, 4000, 4096])
+              text = random.choice([
+                  "\n\n".join("".join(random.choices(string.ascii_letters + " ", k=random.randint(1, 900)))
+                              for _ in range(random.randint(1, 10))),
+                  "".join(random.choices(string.ascii_letters, k=random.randint(1, 9000))),
+                  " ".join("".join(random.choices(string.ascii_lowercase, k=random.randint(1, 15)))
+                           for _ in range(random.randint(1, 600))),
+                  "".join(random.choices("日本語テスト🎙📄 ", k=random.randint(1, 2000))),
+              ])
+              chunks = split_telegram_message(text, limit)
+              assert all(len(c) <= limit for c in chunks), f"chunk exceeded {limit}"
+              stripped = lambda s: s.replace(" ", "").replace("\n", "")
+              assert stripped("".join(chunks)) == stripped(text), "content lost while splitting"
+          print("splitter invariants hold over 300 randomised cases")
+          PY
+
+      - name: Redis-backed history and FSM isolation
+        run: |
+          python - <<'PY'
+          import asyncio
+          import fakeredis.aioredis
+          from aiogram.fsm.storage.redis import RedisStorage, DefaultKeyBuilder
+          from aiogram.fsm.storage.base import StorageKey
+          from shared.history import HistoryManager
+
+          async def main():
+              r = fakeredis.aioredis.FakeRedis(decode_responses=True)
+
+              voice = HistoryManager(r, "voice", max_turns=3)
+              crypto = HistoryManager(r, "crypto", max_turns=3)
+              assert voice.key(1) == "konkred:hist:voice:1"
+
+              for i in range(6):
+                  await voice.add_exchange(1, f"q{i}", f"a{i}")
+              assert len(await voice.get(1)) == 6, "sliding window not trimmed"
+              assert await crypto.get(1) == [], "history leaked across bots"
+
+              seen = {}
+              for key in ("voice", "pdf", "ielts", "content", "crypto"):
+                  storage = RedisStorage(
+                      redis=r,
+                      key_builder=DefaultKeyBuilder(prefix=f"konkred:fsm:{key}", with_bot_id=True),
+                  )
+                  sk = StorageKey(bot_id=1, chat_id=1, user_id=1)
+                  await storage.set_data(sk, {"bot": key})
+                  seen[key] = (await storage.get_data(sk))["bot"]
+              assert seen == {k: k for k in seen}, f"FSM state leaked between bots: {seen}"
+              print("history + FSM isolation ok")
+
+          asyncio.run(main())
+          PY
+
+  # ===========================================================================
+  # Integration: the real bot client talking to the real gateway over HTTP
+  # ===========================================================================
+  integration:
+    name: Integration (bots -> gateway)
+    runs-on: ubuntu-latest
+    needs: [gateway, bots]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: bots/requirements.txt
+
+      - name: Install bot dependencies
+        run: pip install -r bots/requirements.txt
+
+      - name: Start the gateway
+        env:
+          MOCK_ONLY: 'true'
+          PORT: '3000'
+        run: |
+          node gateway/src/server.mjs &
+          echo "GATEWAY_PID=$!" >> "$GITHUB_ENV"
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+      - name: Exercise every bot task route through the real client
+        working-directory: bots
+        env:
+          GATEWAY_URL: http://127.0.0.1:3000
+        run: |
+          python - <<'PY'
+          import asyncio
+          from shared.gateway_client import GatewayClient, GatewayError, inline_data_part, text_part
+          from shared.utils import extract_json_block
+
+          async def main():
+              gw = GatewayClient(base_url="http://127.0.0.1:3000")
+              health = await gw.health()
+              print("gateway:", health["status"])
+
+              # voice: multimodal audio part
+              out = await gw.ask(
+                  "summarization",
+                  [{"role": "user", "content": [text_part("Transcribe."),
+                                                inline_data_part("audio/ogg", b"OggS" + b"\0" * 512)]}],
+                  user_id="ci-voice")
+              assert out, "voice route returned nothing"
+
+              # pdf / ielts / content / crypto task routes
+              for task, uid in [("spec-generation", "ci-pdf"), ("general", "ci-ielts"),
+                                ("code-generation", "ci-content"), ("classification", "ci-crypto")]:
+                  out = await gw.ask(task, [{"role": "user", "content": f"ci probe for {task}"}], user_id=uid)
+                  assert out, f"{task} returned nothing"
+                  print(f"{task:16s} ok")
+
+              # json mode must be machine-parseable (the quiz path depends on it)
+              raw = await gw.ask("spec-generation", [{"role": "user", "content": "make a quiz"}],
+                                 json_mode=True, user_id="ci-json")
+              assert extract_json_block(raw) is not None, "json mode output not parseable"
+              print("json mode      ok")
+
+              # the limiter must produce a typed, user-presentable error
+              try:
+                  for i in range(40):
+                      await gw.ask("general", [{"role": "user", "content": f"burst {i}"}],
+                                   user_id="ci-burst", max_tokens=32)
+              except GatewayError as exc:
+                  assert exc.is_rate_limit, f"unexpected error class: {exc}"
+                  assert "rate limit" in exc.user_message().lower()
+                  print("rate limiting  ok")
+              else:
+                  raise AssertionError("limiter never engaged")
+
+              await gw.aclose()
+
+          asyncio.run(main())
+          print("integration ok")
+          PY
+
+      - name: Stop the gateway
+        if: always()
+        run: kill "$GATEWAY_PID" 2>/dev/null || true
+
+  # ===========================================================================
+  # Deployment manifests
+  # ===========================================================================
+  compose:
+    name: Compose & manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+          echo "compose config valid"
+
+      - name: Services and dependencies are wired correctly
+        run: |
+          cp -n .env.example .env || true
+          services=$(docker compose config --services | sort | tr '\n' ' ')
+          echo "services: $services"
+          [ "$services" = "bot gateway redis " ] || { echo "::error::unexpected services: $services"; exit 1; }
+
+      - name: Validate YAML manifests
+        run: |
+          python - <<'PY'
+          import sys, yaml
+          for path in ("render.yaml", "koyeb.yaml", ".github/workflows/ci.yml", "docker-compose.yml"):
+              with open(path) as fh:
+                  yaml.safe_load(fh)
+              print(f"{path}: valid YAML")
+          PY
+
+      - name: setup.sh must be executable and syntactically valid
+        run: |
+          test -x setup.sh || { echo "::error::setup.sh is not executable"; exit 1; }
+          bash -n setup.sh
+          echo "setup.sh ok"
+
+      - name: Shellcheck
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck --severity=warning setup.sh

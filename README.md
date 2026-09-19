@@ -430,6 +430,12 @@ cd gateway && node --test test/*.test.mjs
 cd bots && python -m compileall -q . && python -m flake8 .
 ```
 
+> **Activating CI:** the pipeline lives at `ci/github-actions-ci.yml` rather
+> than `.github/workflows/ci.yml`, because the GitHub App used to push this
+> branch lacks the `workflows` permission. Move it into place with
+> `git mv ci/github-actions-ci.yml .github/workflows/ci.yml` — no edits needed.
+> See [`ci/README.md`](ci/README.md).
+
 CI runs four jobs on every push and pull request:
 
 | Job | What it proves |
@@ -521,7 +527,7 @@ konkred-bots/
 ├── setup.sh                    one-command bootstrap with preflight checks
 ├── .env.example                every variable, documented
 ├── render.yaml  koyeb.yaml     deployment blueprints
-├── .github/workflows/ci.yml    gateway · bots · integration · compose
+├── ci/github-actions-ci.yml    gateway · bots · integration · compose
 │
 ├── gateway/                    Node 20 · ESM · zero dependencies
 │   ├── Dockerfile              node:20-alpine, non-root, HEALTHCHECK
