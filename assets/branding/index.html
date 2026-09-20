@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Konkred Bots — Brand Asset Gallery</title>
+<style>
+  :root {
+    --bg: #0a0d14;
+    --panel: #11151f;
+    --panel-2: #151a26;
+    --line: #232a3a;
+    --text: #e8ecf4;
+    --muted: #8b94a7;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(124,92,255,.14), transparent 60%),
+      radial-gradient(1000px 500px at 90% 110%, rgba(0,210,190,.10), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    padding: 48px 24px 80px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 14px; }
+  header h1 { font-size: 30px; font-weight: 700; letter-spacing: .3px; }
+  header h1 span {
+    background: linear-gradient(90deg, #8b7bff, #4aa8ff, #35d6a4, #ff5fa8, #38d9f5);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header p { color: var(--muted); margin-top: 8px; font-size: 15px; }
+  .legend {
+    display: flex; gap: 18px; justify-content: center; flex-wrap: wrap;
+    margin: 22px 0 44px; color: var(--muted); font-size: 13px;
+  }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+  .bot {
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 28px;
+    margin-bottom: 36px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.35);
+  }
+  .bot-head { display: flex; align-items: center; gap: 18px; margin-bottom: 22px; flex-wrap: wrap; }
+  .bot-head img.avatar { width: 84px; height: 84px; border-radius: 22px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  .bot-head .titles { flex: 1; min-width: 220px; }
+  .bot-head h2 { font-size: 24px; font-weight: 700; }
+  .bot-head .role { color: var(--muted); font-size: 14px; margin-top: 4px; }
+  .chip {
+    font-size: 12px; font-weight: 600; letter-spacing: .4px;
+    padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line);
+    color: var(--muted); white-space: nowrap;
+  }
+  .sizes { display: flex; align-items: flex-end; gap: 16px; margin-left: auto; }
+  .sizes .s { text-align: center; color: var(--muted); font-size: 11px; }
+  .sizes img { border-radius: 50%; display: block; margin: 0 auto 6px; box-shadow: 0 4px 14px rgba(0,0,0,.45); }
+  .banner img {
+    width: 100%; display: block; border-radius: 14px;
+    border: 1px solid var(--line);
+    box-shadow: 0 16px 44px rgba(0,0,0,.45);
+  }
+  .files {
+    margin-top: 16px; display: flex; gap: 22px; flex-wrap: wrap;
+    color: var(--muted); font-size: 12.5px; font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  }
+  .files b { color: #c3cad9; font-weight: 600; }
+  footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 30px; line-height: 1.7; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span>Konkred Bots</span> — Brand Asset Gallery</h1>
+    <p>Premium profile pictures &amp; welcome banners · one design family, one signature color per bot</p>
+  </header>
+
+  <div class="legend">
+    <span><i style="background:#8b7bff"></i>Voiso — violet</span>
+    <span><i style="background:#ffb454"></i>DocuNest — amber</span>
+    <span><i style="background:#35d6a4"></i>MockMate — emerald</span>
+    <span><i style="background:#ff5fa8"></i>Hookify — magenta</span>
+    <span><i style="background:#38d9f5"></i>WhaleSonar — cyan</span>
+  </div>
+
+  <!-- VOISO -->
+  <section class="bot">
+    <div class="bot-head">
+      <img class="avatar" src="voiso/profile.png" alt="Voiso avatar">
+      <div class="titles">
+        <h2>Voiso</h2>
+        <div class="role">Voice-to-Action Bot · waveform → bullet points</div>
+      </div>
+      <span class="chip">ELECTRIC VIOLET / ULTRAMARINE</span>
+      <div class="sizes">
+        <div class="s"><img src="voiso/profile.png" width="64" height="64">64px</div>
+        <div class="s"><img src="voiso/profile.png" width="40" height="40">40px</div>
+        <div class="s"><img src="voiso/profile.png" width="24" height="24">24px</div>
+      </div>
+    </div>
+    <div class="banner"><img src="voiso/banner.png" alt="Voiso welcome banner"></div>
+    <div class="files">
+      <span><b>assets/branding/voiso/profile.png</b> · 1024×1024</span>
+      <span><b>assets/branding/voiso/banner.png</b> · 1376×768 (16:9)</span>
+    </div>
+  </section>
+
+  <!-- DOCUNEST -->
+  <section class="bot">
+    <div class="bot-head">
+      <img class="avatar" src="docunest/profile.png" alt="DocuNest avatar">
+      <div class="titles">
+        <h2>DocuNest</h2>
+        <div class="role">PDF &amp; Document AI · document cradled in a nest</div>
+      </div>
+      <span class="chip">WARM AMBER / HONEY GOLD</span>
+      <div class="sizes">
+        <div class="s"><img src="docunest/profile.png" width="64" height="64">64px</div>
+        <div class="s"><img src="docunest/profile.png" width="40" height="40">40px</div>
+        <div class="s"><img src="docunest/profile.png" width="24" height="24">24px</div>
+      </div>
+    </div>
+    <div class="banner"><img src="docunest/banner.png" alt="DocuNest welcome banner"></div>
+    <div class="files">
+      <span><b>assets/branding/docunest/profile.png</b> · 1024×1024</span>
+      <span><b>assets/branding/docunest/banner.png</b> · 1376×768 (16:9)</span>
+    </div>
+  </section>
+
+  <!-- MOCKMATE -->
+  <section class="bot">
+    <div class="bot-head">
+      <img class="avatar" src="mockmate/profile.png" alt="MockMate avatar">
+      <div class="titles">
+        <h2>MockMate</h2>
+        <div class="role">IELTS &amp; Interview Coach · mic + score dial + dialogue</div>
+      </div>
+      <span class="chip">EMERALD / MINT</span>
+      <div class="sizes">
+        <div class="s"><img src="mockmate/profile.png" width="64" height="64">64px</div>
+        <div class="s"><img src="mockmate/profile.png" width="40" height="40">40px</div>
+        <div class="s"><img src="mockmate/profile.png" width="24" height="24">24px</div>
+      </div>
+    </div>
+    <div class="banner"><img src="mockmate/banner.png" alt="MockMate welcome banner"></div>
+    <div class="files">
+      <span><b>assets/branding/mockmate/profile.png</b> · 1024×1024</span>
+      <span><b>assets/branding/mockmate/banner.png</b> · 1376×768 (16:9)</span>
+    </div>
+  </section>
+
+  <!-- HOOKIFY -->
+  <section class="bot">
+    <div class="bot-head">
+      <img class="avatar" src="hookify/profile.png" alt="Hookify avatar">
+      <div class="titles">
+        <h2>Hookify</h2>
+        <div class="role">Viral Reels &amp; Script Architect · play-button fishhook</div>
+      </div>
+      <span class="chip">HOT MAGENTA / ELECTRIC PURPLE</span>
+      <div class="sizes">
+        <div class="s"><img src="hookify/profile.png" width="64" height="64">64px</div>
+        <div class="s"><img src="hookify/profile.png" width="40" height="40">40px</div>
+        <div class="s"><img src="hookify/profile.png" width="24" height="24">24px</div>
+      </div>
+    </div>
+    <div class="banner"><img src="hookify/banner.png" alt="Hookify welcome banner"></div>
+    <div class="files">
+      <span><b>assets/branding/hookify/profile.png</b> · 1024×1024</span>
+      <span><b>assets/branding/hookify/banner.png</b> · 1376×768 (16:9)</span>
+    </div>
+  </section>
+
+  <!-- WHALESONAR -->
+  <section class="bot">
+    <div class="bot-head">
+      <img class="avatar" src="whalesonar/profile.png" alt="WhaleSonar avatar">
+      <div class="titles">
+        <h2>WhaleSonar</h2>
+        <div class="role">Crypto Radar &amp; Sentiment · whale through sonar rings</div>
+      </div>
+      <span class="chip">DEEP OCEAN NAVY / CYAN</span>
+      <div class="sizes">
+        <div class="s"><img src="whalesonar/profile.png" width="64" height="64">64px</div>
+        <div class="s"><img src="whalesonar/profile.png" width="40" height="40">40px</div>
+        <div class="s"><img src="whalesonar/profile.png" width="24" height="24">24px</div>
+      </div>
+    </div>
+    <div class="banner"><img src="whalesonar/banner.png" alt="WhaleSonar welcome banner"></div>
+    <div class="files">
+      <span><b>assets/branding/whalesonar/profile.png</b> · 1024×1024</span>
+      <span><b>assets/branding/whalesonar/banner.png</b> · 1376×768 (16:9)</span>
+    </div>
+  </section>
+
+  <footer>
+    Design system: dark cinematic 3D · glassmorphism · soft studio lighting · subtle film grain<br>
+    Telegram avatar previews at 64 / 40 / 24 px shown above each banner.
+  </footer>
+</div>
+</body>
+</html>
