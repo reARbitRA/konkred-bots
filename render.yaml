@@ -1,66 +1,83 @@
-# =============================================================================
-# Render.com blueprint - https://render.com/docs/blueprint-spec
-#
-# Deploy:
-#   1. Push this repository to GitHub.
-#   2. Render Dashboard -> New -> Blueprint -> select the repo.
-#   3. Fill in the secrets marked `sync: false` when prompted.
-#
-# Free-tier notes:
-#   * Key Value (Redis) free plan has no persistence - conversation memory is
-#     lost on restart, which is acceptable here because history is disposable.
-#   * The gateway is a free web service and sleeps after 15 minutes of
-#     inactivity; the first request after sleeping takes ~30s to wake.
-#   * The bot is a background worker. Background workers are NOT free on Render:
-#     if you want a zero-cost deployment, run the bot on Koyeb (see koyeb.yaml)
-#     or Fly.io and point it at this gateway via GATEWAY_URL.
-# =============================================================================
-
-databases: []
-
+# One Render free web service: Node gateway + Python webhook receiver share one
+# container. Redis is external (for example Upstash); there is no paid worker or
+# Render Key Value service in this blueprint.
 services:
-  # ---------------------------------------------------------------------------
-  # Redis (Render Key Value) - FSM state + conversation memory
-  # ---------------------------------------------------------------------------
-  - type: keyvalue
-    name: konkred-redis
-    plan: free
-    region: oregon
-    maxmemoryPolicy: allkeys-lru
-    ipAllowList: []          # empty = reachable only from inside Render
-
-  # ---------------------------------------------------------------------------
-  # AI Gateway - public HTTP service
-  # ---------------------------------------------------------------------------
   - type: web
-    name: konkred-gateway
+    name: konkred-bots
     runtime: docker
     plan: free
-    region: oregon
-    branch: main
-    rootDir: gateway
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /api/health
+    healthCheckPath: /healthz
     autoDeploy: true
     envVars:
+      # --- Unified runtime -------------------------------------------------
+      - key: BOT_MODE
+        value: webhook
+      - key: GATEWAY_URL
+        value: http://127.0.0.1:3000
+      - key: GATEWAY_PORT
+        value: "3000"
+      - key: WEB_HOST
+        value: 0.0.0.0
+      # Render automatically injects RENDER_EXTERNAL_URL; the bot uses it when
+      # WEBHOOK_HOST is absent.
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: DROP_PENDING_UPDATES
+        value: "false"
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: "3000"
-      - key: HOST
-        value: 0.0.0.0
       - key: LOG_LEVEL
-        value: info
+        value: INFO
 
-      # --- Security -------------------------------------------------------
+      # --- External Redis (paste an Upstash rediss:// connection string) ---
+      - key: REDIS_URL
+        sync: false
+
+      # --- Revenue gate ----------------------------------------------------
+      - key: PAYMENTS_ENABLED
+        value: "true"
+      - key: FREE_REQUESTS
+        value: "5"
+      - key: STARS_PRICE
+        value: "100"
+      - key: PAID_ACCESS_DAYS
+        value: "30"
+      - key: PAYMENT_SECRET
+        generateValue: true
+      # Optional manual USDT fallback. Leave blank to show Stars only.
+      - key: USDT_WALLET_ADDRESS
+        sync: false
+      - key: USDT_NETWORK
+        value: TRC20
+      - key: USDT_PRICE
+        value: "2.99"
+      - key: PAYMENT_ADMIN_IDS
+        sync: false
+      - key: PAYMENT_SUPPORT
+        sync: false
+
+      # --- Gateway security ------------------------------------------------
       - key: ADMIN_KEY
-        generateValue: true       # Render generates a strong random value
+        generateValue: true
       - key: GATEWAY_API_KEY
         generateValue: true
       - key: USERS_JSON
         sync: false
 
-      # --- Provider credentials (entered at deploy time) -------------------
+      # --- Telegram tokens (set only the bots you want) --------------------
+      - key: TELEGRAM_VOICE_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_PDF_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_IELTS_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CONTENT_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CRYPTO_BOT_TOKEN
+        sync: false
+
+      # --- Free AI provider credentials (all optional) ---------------------
       - key: GEMINI_KEY_P1
         sync: false
       - key: GEMINI_KEY_P2
@@ -82,7 +99,7 @@ services:
       - key: GITHUB_TOKEN
         sync: false
 
-      # --- Tuning ----------------------------------------------------------
+      # --- Gateway behaviour ----------------------------------------------
       - key: CACHE_ENABLED
         value: "true"
       - key: CACHE_TTL_SECONDS
@@ -95,55 +112,7 @@ services:
         value: "true"
       - key: WATCHDOG_CALIBRATION
         value: "true"
-
-  # ---------------------------------------------------------------------------
-  # Telegram bot daemon - background worker (paid plan; see note above)
-  # ---------------------------------------------------------------------------
-  - type: worker
-    name: konkred-bots
-    runtime: docker
-    plan: starter
-    region: oregon
-    branch: main
-    rootDir: bots
-    dockerfilePath: ./Dockerfile
-    autoDeploy: true
-    envVars:
-      - key: LOG_LEVEL
-        value: INFO
-
-      # Wire the worker to the gateway and Redis created above.
-      - key: GATEWAY_URL
-        fromService:
-          type: web
-          name: konkred-gateway
-          property: hostport
-      - key: GATEWAY_API_KEY
-        fromService:
-          type: web
-          name: konkred-gateway
-          envVarKey: GATEWAY_API_KEY
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: konkred-redis
-          property: connectionString
-
-      # --- Telegram tokens (entered at deploy time) ------------------------
-      - key: TELEGRAM_VOICE_BOT_TOKEN
-        sync: false
-      - key: TELEGRAM_PDF_BOT_TOKEN
-        sync: false
-      - key: TELEGRAM_IELTS_BOT_TOKEN
-        sync: false
-      - key: TELEGRAM_CONTENT_BOT_TOKEN
-        sync: false
-      - key: TELEGRAM_CRYPTO_BOT_TOKEN
-        sync: false
-
       - key: HISTORY_TURNS
         value: "10"
       - key: HISTORY_TTL
         value: "86400"
-      - key: DROP_PENDING_UPDATES
-        value: "true"

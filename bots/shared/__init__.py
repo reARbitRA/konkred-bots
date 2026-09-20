@@ -12,6 +12,7 @@ from .config import (
     get_active_bots,
     get_bot,
     settings,
+    validate_settings,
 )
 from .gateway_client import (
     GatewayClient,
@@ -21,6 +22,7 @@ from .gateway_client import (
     text_part,
 )
 from .history import HistoryManager
+from .payments import AccessDecision, PaymentManager, create_payment_router
 from .utils import (
     UNEXPECTED_ERROR,
     clean_model_output,
@@ -34,15 +36,18 @@ from .utils import (
 )
 
 __all__ = [
+    "AccessDecision",
     "BOT_SPECS",
     "UNEXPECTED_ERROR",
     "BotSpec",
     "GatewayClient",
     "GatewayError",
     "HistoryManager",
+    "PaymentManager",
     "Settings",
     "clean_model_output",
     "configure_logging",
+    "create_payment_router",
     "escape_html",
     "extract_json_block",
     "format_duration",
@@ -56,4 +61,5 @@ __all__ = [
     "split_telegram_message",
     "text_part",
     "truncate",
+    "validate_settings",
 ]

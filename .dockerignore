@@ -1,0 +1,26 @@
+# Never include source-control metadata or local secrets in the unified image.
+.git/
+.github/
+.env
+.env.*
+!.env.example
+
+# Local/editor/cache output.
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/node_modules/
+**/.DS_Store
+*.log
+
+# Runtime state and files not needed by the production image.
+gateway/data/runtime.state.json
+bots/tests/
+gateway/test/
+ci/
+docker-compose.yml
+render.yaml
+setup.sh
+README.md

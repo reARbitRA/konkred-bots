@@ -21,6 +21,7 @@ from aiogram.types import CallbackQuery, Message
 from shared.config import settings
 from shared.gateway_client import GatewayError, gateway
 from shared.history import HistoryManager
+from shared.payments import PaymentManager
 from shared.utils import (
     UNEXPECTED_ERROR,
     clean_model_output,
@@ -355,13 +356,20 @@ async def callback_menu(query: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data.in_({f"{CB_PREFIX}:{action}" for action in ANALYSIS_PROMPTS}))
-async def callback_analysis(query: CallbackQuery, state: FSMContext, history: HistoryManager) -> None:
+async def callback_analysis(
+    query: CallbackQuery,
+    state: FSMContext,
+    history: HistoryManager,
+    payments: PaymentManager,
+) -> None:
     action = query.data.split(":", 1)[1]
     doc_text, doc_name = await _document(state)
     await query.answer()
 
     if not doc_text:
         await query.message.answer("📄 I don't have a document loaded. Please send one first.")
+        return
+    if not await payments.require(query.message, query.from_user.id):
         return
 
     labels = {
@@ -423,11 +431,17 @@ Rules:
 
 
 @router.callback_query(F.data == f"{CB_PREFIX}:quiz")
-async def callback_quiz(query: CallbackQuery, state: FSMContext) -> None:
+async def callback_quiz(
+    query: CallbackQuery,
+    state: FSMContext,
+    payments: PaymentManager,
+) -> None:
     doc_text, doc_name = await _document(state)
     await query.answer()
     if not doc_text:
         await query.message.answer("📄 I don't have a document loaded. Please send one first.")
+        return
+    if not await payments.require(query.message, query.from_user.id):
         return
 
     status = await query.message.answer("❓ Writing your quiz…")
@@ -600,12 +614,19 @@ async def _finish_quiz(message: Message, state: FSMContext) -> None:
 # --------------------------------------------------------------------------- #
 
 @router.message(F.text & ~F.text.startswith("/"))
-async def handle_question(message: Message, state: FSMContext, history: HistoryManager) -> None:
+async def handle_question(
+    message: Message,
+    state: FSMContext,
+    history: HistoryManager,
+    payments: PaymentManager,
+) -> None:
     doc_text, doc_name = await _document(state)
     if not doc_text:
         await message.answer(
             "📄 Send me a PDF, DOCX, TXT or MD file first and I'll analyse it.\n\nUse /help for details."
         )
+        return
+    if not await payments.require(message, message.from_user.id):
         return
 
     thinking = await message.answer("🔍 Searching the document…")
