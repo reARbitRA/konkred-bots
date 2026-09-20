@@ -13,7 +13,8 @@ from types import SimpleNamespace
 
 os.environ["BOT_MODE"] = "webhook"
 os.environ["WEBHOOK_HOST"] = "https://example.test"
-os.environ["WEBHOOK_SECRET"] = "webhook_test_secret_123456"
+# Render generateValue uses base64; the application derives Telegram-safe hex.
+os.environ["WEBHOOK_SECRET"] = "B0jrphAPOY7pg92AN0c9MN4yecczLMdwnx4OkA1KFUk="
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -21,6 +22,7 @@ from aiogram import Bot  # noqa: E402
 from aiohttp.test_utils import TestClient, TestServer  # noqa: E402
 
 from main import PublicServer  # noqa: E402
+from shared.config import settings  # noqa: E402
 
 
 class RecordingDispatcher:
@@ -58,6 +60,9 @@ async def main() -> None:
         },
     }
     path = f"/webhook/voice/{'a' * 32}"
+    assert len(settings.webhook_header_secret) == 64
+    assert all(char in "0123456789abcdef" for char in settings.webhook_header_secret)
+    assert settings.webhook_header_secret != os.environ["WEBHOOK_SECRET"]
 
     denied = await client.post(path, json=update)
     assert denied.status == 403
@@ -66,7 +71,7 @@ async def main() -> None:
     accepted = await client.post(
         path,
         json=update,
-        headers={"X-Telegram-Bot-Api-Secret-Token": os.environ["WEBHOOK_SECRET"]},
+        headers={"X-Telegram-Bot-Api-Secret-Token": settings.webhook_header_secret},
     )
     latency = time.monotonic() - started
     assert accepted.status == 200

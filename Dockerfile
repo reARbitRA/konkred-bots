@@ -20,7 +20,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONPATH=/app/bots \
     NODE_ENV=production \
-    NODE_OPTIONS=--max-old-space-size=320 \
+    NODE_OPTIONS=--max-old-space-size=192 \
     GATEWAY_PORT=3000 \
     GATEWAY_URL=http://127.0.0.1:3000 \
     WEB_HOST=0.0.0.0 \

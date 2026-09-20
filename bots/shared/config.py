@@ -12,9 +12,9 @@ cleanly. Secrets always come from the environment or an untracked ``.env``.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
@@ -226,6 +226,17 @@ class Settings:
     def paid_access_seconds(self) -> int:
         return self.paid_access_days * 86400
 
+    @property
+    def webhook_header_secret(self) -> str:
+        """Telegram-safe secret derived from the host-generated secret seed.
+
+        Render's ``generateValue`` produces base64 (which can contain ``=`` or
+        ``/``), while Telegram only accepts letters, digits, underscores and
+        hyphens. A SHA-256 hex digest preserves the seed's entropy and always
+        satisfies Telegram's format without exposing the original value.
+        """
+        return hashlib.sha256(self.webhook_secret.encode("utf-8")).hexdigest()
+
 
 settings: Final[Settings] = Settings()
 
@@ -238,10 +249,8 @@ def validate_settings() -> list[str]:
     if settings.bot_mode == "webhook":
         if not settings.webhook_host.startswith("https://"):
             errors.append("WEBHOOK_HOST (or RENDER_EXTERNAL_URL) must be an https:// URL in webhook mode")
-        if not re.fullmatch(r"[A-Za-z0-9_-]{16,256}", settings.webhook_secret):
-            errors.append(
-                "WEBHOOK_SECRET must be 16-256 characters using only letters, digits, '_' or '-'"
-            )
+        if len(settings.webhook_secret) < 16:
+            errors.append("WEBHOOK_SECRET must contain at least 16 characters in webhook mode")
     return errors
 
 

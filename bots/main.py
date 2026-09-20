@@ -235,7 +235,7 @@ class PublicServer:
             raise web.HTTPNotFound()
 
         supplied_header = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-        if not hmac.compare_digest(supplied_header, settings.webhook_secret):
+        if not hmac.compare_digest(supplied_header, settings.webhook_header_secret):
             raise web.HTTPForbidden(text="invalid Telegram secret")
 
         try:
@@ -297,7 +297,7 @@ async def configure_webhooks(runtimes: list[BotRuntime]) -> None:
             url=url,
             allowed_updates=runtime.dispatcher.resolve_used_update_types(),
             drop_pending_updates=settings.drop_pending_updates,
-            secret_token=settings.webhook_secret,
+            secret_token=settings.webhook_header_secret,
         )
         logger.info("🔗 %s webhook registered", runtime.spec.key)
 

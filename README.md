@@ -265,8 +265,7 @@ The transport is selected with `BOT_MODE`:
   validates Telegram's secret header, schedules dispatch in the background, and
   returns `200 OK` immediately. This is the Render mode.
 - **`polling`** — every dispatcher long-polls Telegram concurrently. aiohttp
-  still serves `/healthz`, allowing the same unified image to run as a Docker
-  Space on Hugging Face.
+  still serves `/healthz` for local Compose or a paid always-on container host.
 
 Shared infrastructure lives in `bots/shared/`:
 
@@ -373,12 +372,13 @@ a signed, user-bound payload, and `successful_payment` writes the entitlement to
 Redis immediately. No external payment provider token is needed for Stars used
 to sell digital bot access.
 
-An optional **USDT fallback** appears only when `USDT_WALLET_ADDRESS` is set. A
-user submits `/verify <transaction-id>` after transfer; the configured
-`PAYMENT_ADMIN_IDS` receive approve/reject buttons. This path is intentionally
-manual—showing a wallet address cannot safely prove an on-chain payment by
-itself. Always verify network, amount, confirmations and destination in a block
-explorer before approving.
+An optional **USDT fallback** exists behind `USDT_WALLET_ADDRESS`, with manual
+admin verification. Keep it **disabled for in-Telegram digital access** unless
+you have obtained platform/legal guidance: Telegram's current terms require
+digital goods and services sold inside bots to use Stars. Showing a wallet
+address also cannot safely prove an on-chain payment by itself. The default
+Render configuration leaves the address blank, so the compliant deployment
+path is Stars only.
 
 All pricing and limits are environment settings, so they can be changed without
 a rebuild. Setting `PAYMENTS_ENABLED=false` disables the gate.
@@ -424,7 +424,8 @@ links to where each credential is issued. Highlights:
 manifest references secrets with `sync: false` or generates them, so nothing
 sensitive lives in version control. Bot tokens are never placed in webhook URLs:
 the path contains an HMAC-derived value and Telegram must also send the
-`X-Telegram-Bot-Api-Secret-Token` header.
+`X-Telegram-Bot-Api-Secret-Token` header. Render's generated base64 secret is
+hashed to Telegram-safe hexadecimal before it is registered or compared.
 
 **Admin authentication is timing-safe.** The `x-admin-key` header is compared
 with `crypto.timingSafeEqual` over equal-length buffers, which does not leak the
@@ -548,32 +549,35 @@ handles `/healthz` plus Telegram webhooks. `render.yaml` contains exactly one
 6. Keep `FREE_REQUESTS=5`; choose your `STARS_PRICE` and
    `PAID_ACCESS_DAYS`. For USDT, also set `USDT_WALLET_ADDRESS`,
    `PAYMENT_ADMIN_IDS` and `PAYMENT_SUPPORT`.
-7. Add at least one free AI provider key for real model output. With no provider
-   key, `ALLOW_MOCK=true` keeps the service testable but produces mock answers.
+7. Add at least one free AI provider key for real model output. OpenRouter's
+   free router covers every text task without a payment method; native voice
+   transcription still needs a multimedia-capable key such as Gemini. With no
+   provider key, `ALLOW_MOCK=true` keeps the service testable but produces mock
+   answers.
 8. Deploy and open `https://your-service.onrender.com/healthz`. Logs should show
    each active bot followed by `webhook registered`.
 
 `DROP_PENDING_UPDATES=false` is intentional in webhook mode: an update that
 wakes a sleeping service must not be discarded during startup. Telegram retries
-a temporarily unreachable webhook while the free instance starts.
+an unsuccessful webhook while the free instance starts.
 
-### Hugging Face Docker Space — polling mode
+**Free-tier limits:** Render documents roughly one-minute cold starts, 512 MB RAM,
+750 instance-hours per workspace/month, ephemeral local storage, and possible
+suspension for unusually high outbound traffic. The hosted profile caps Node's
+heap, cache entries, and upload size accordingly, and all durable state stays in
+Redis. A Stars invoice should be paid while the bot is awake; if an old invoice
+fails pre-checkout after a long idle period, send the request again to wake the
+bot and issue a fresh invoice. Render explicitly positions Free instances for
+hobby/testing rather than production SLAs.
 
-The same root `Dockerfile` also works in a Docker Space:
+### Hugging Face Docker Space — supported, but no longer a zero-card path
 
-1. Create a new **Docker / Blank** Space and set its app port to `7860` (the
-   Dockerfile already exposes it).
-2. Push/import this repository into the Space.
-3. Add bot/provider tokens as **Secrets**, not public Variables.
-4. Add `REDIS_URL` as a Secret and set `BOT_MODE=polling`, `PORT=7860`,
-   `WEB_HOST=0.0.0.0` as Variables.
-5. Configure the same revenue variables described above and restart the Space.
-6. Confirm the Space health page reports `"mode":"polling"`, then send `/start`
-   to a configured bot.
-
-Polling only works while the Space is running. If the account's current free
-Space policy sleeps idle containers, use Render webhook mode instead; do not
-rely on polling to wake a sleeping container.
+The root image remains compatible with Docker Spaces (`BOT_MODE=polling`,
+`PORT=7860`), but Hugging Face now requires a PRO, Team, or Enterprise plan to
+create a new compute-backed Docker Space. CPU Basic has no hourly compute charge
+once available, yet account access itself is paid and free hardware can sleep.
+It therefore does **not** meet this project's zero-credit-card deployment goal.
+Use Render webhook mode for the genuinely free hosted path.
 
 ### Required hosted secrets
 

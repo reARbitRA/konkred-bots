@@ -45,7 +45,8 @@ services:
         value: "30"
       - key: PAYMENT_SECRET
         generateValue: true
-      # Optional manual USDT fallback. Leave blank to show Stars only.
+      # Optional manual USDT fallback. Keep blank for in-Telegram digital
+      # access unless platform/legal guidance confirms a compliant use case.
       - key: USDT_WALLET_ADDRESS
         sync: false
       - key: USDT_NETWORK
@@ -104,6 +105,12 @@ services:
         value: "true"
       - key: CACHE_TTL_SECONDS
         value: "600"
+      # Keep headroom inside Render Free's 512 MB RAM while Node and Python
+      # share the same instance.
+      - key: CACHE_MAX_ENTRIES
+        value: "150"
+      - key: MAX_FILE_MB
+        value: "15"
       - key: DEDUP_ENABLED
         value: "true"
       - key: ALLOW_MOCK
