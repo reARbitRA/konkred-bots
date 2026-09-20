@@ -1,0 +1,20 @@
+{
+  "name": "konkred-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Konkred AI Gateway - quota-aware multi-provider LLM reverse proxy with zero runtime dependencies",
+  "type": "module",
+  "main": "src/server.mjs",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "dev": "node --watch src/server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check src/server.mjs && node -e \"import('./src/server.mjs').then(()=>console.log('esm graph ok'))\""
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "license": "MIT"
+}

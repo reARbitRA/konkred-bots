@@ -1,0 +1,119 @@
+###############################################################################
+# Konkred multi-bot AI ecosystem
+#
+#   redis    -> conversation memory + Aiogram FSM state
+#   gateway  -> quota-aware multi-provider AI reverse proxy (port 3000)
+#   bot      -> single Python daemon running all five Telegram bots
+#
+# Start with:  ./setup.sh      (or: docker compose up --build -d)
+###############################################################################
+
+name: konkred
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: konkred-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+    volumes:
+      - redis-data:/data
+    networks:
+      - internal-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    image: konkred/gateway:1.0.0
+    container_name: konkred-gateway
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOST: 0.0.0.0
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    # Published so you can reach the admin dashboard from the host.
+    # Remove this block to keep the gateway strictly internal.
+    ports:
+      - "${GATEWAY_PORT:-3000}:3000"
+    volumes:
+      # Persists the watchdog's daily quota counters across restarts.
+      - gateway-state:/app/data
+    networks:
+      - internal-net
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  bot:
+    build:
+      context: ./bots
+      dockerfile: Dockerfile
+    image: konkred/bots:1.0.0
+    container_name: konkred-bots
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      GATEWAY_URL: http://gateway:3000
+      REDIS_URL: redis://redis:6379/0
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    networks:
+      - internal-net
+    depends_on:
+      redis:
+        condition: service_healthy
+      gateway:
+        condition: service_healthy
+    # Telegram long-polling needs a moment to drain on shutdown.
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  internal-net:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local
+  gateway-state:
+    driver: local

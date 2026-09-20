@@ -1,0 +1,149 @@
+# =============================================================================
+# Render.com blueprint - https://render.com/docs/blueprint-spec
+#
+# Deploy:
+#   1. Push this repository to GitHub.
+#   2. Render Dashboard -> New -> Blueprint -> select the repo.
+#   3. Fill in the secrets marked `sync: false` when prompted.
+#
+# Free-tier notes:
+#   * Key Value (Redis) free plan has no persistence - conversation memory is
+#     lost on restart, which is acceptable here because history is disposable.
+#   * The gateway is a free web service and sleeps after 15 minutes of
+#     inactivity; the first request after sleeping takes ~30s to wake.
+#   * The bot is a background worker. Background workers are NOT free on Render:
+#     if you want a zero-cost deployment, run the bot on Koyeb (see koyeb.yaml)
+#     or Fly.io and point it at this gateway via GATEWAY_URL.
+# =============================================================================
+
+databases: []
+
+services:
+  # ---------------------------------------------------------------------------
+  # Redis (Render Key Value) - FSM state + conversation memory
+  # ---------------------------------------------------------------------------
+  - type: keyvalue
+    name: konkred-redis
+    plan: free
+    region: oregon
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []          # empty = reachable only from inside Render
+
+  # ---------------------------------------------------------------------------
+  # AI Gateway - public HTTP service
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: konkred-gateway
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: main
+    rootDir: gateway
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: HOST
+        value: 0.0.0.0
+      - key: LOG_LEVEL
+        value: info
+
+      # --- Security -------------------------------------------------------
+      - key: ADMIN_KEY
+        generateValue: true       # Render generates a strong random value
+      - key: GATEWAY_API_KEY
+        generateValue: true
+      - key: USERS_JSON
+        sync: false
+
+      # --- Provider credentials (entered at deploy time) -------------------
+      - key: GEMINI_KEY_P1
+        sync: false
+      - key: GEMINI_KEY_P2
+        sync: false
+      - key: GEMINI_KEY_P3
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: CEREBRAS_API_KEY
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: CF_ACCOUNT_ID
+        sync: false
+      - key: CF_API_TOKEN
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+
+      # --- Tuning ----------------------------------------------------------
+      - key: CACHE_ENABLED
+        value: "true"
+      - key: CACHE_TTL_SECONDS
+        value: "600"
+      - key: DEDUP_ENABLED
+        value: "true"
+      - key: ALLOW_MOCK
+        value: "true"
+      - key: FUSION_ENABLED
+        value: "true"
+      - key: WATCHDOG_CALIBRATION
+        value: "true"
+
+  # ---------------------------------------------------------------------------
+  # Telegram bot daemon - background worker (paid plan; see note above)
+  # ---------------------------------------------------------------------------
+  - type: worker
+    name: konkred-bots
+    runtime: docker
+    plan: starter
+    region: oregon
+    branch: main
+    rootDir: bots
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: LOG_LEVEL
+        value: INFO
+
+      # Wire the worker to the gateway and Redis created above.
+      - key: GATEWAY_URL
+        fromService:
+          type: web
+          name: konkred-gateway
+          property: hostport
+      - key: GATEWAY_API_KEY
+        fromService:
+          type: web
+          name: konkred-gateway
+          envVarKey: GATEWAY_API_KEY
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: konkred-redis
+          property: connectionString
+
+      # --- Telegram tokens (entered at deploy time) ------------------------
+      - key: TELEGRAM_VOICE_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_PDF_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_IELTS_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CONTENT_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CRYPTO_BOT_TOKEN
+        sync: false
+
+      - key: HISTORY_TURNS
+        value: "10"
+      - key: HISTORY_TTL
+        value: "86400"
+      - key: DROP_PENDING_UPDATES
+        value: "true"
