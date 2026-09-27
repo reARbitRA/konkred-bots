@@ -65,6 +65,11 @@ def _message(text: str | None = None, **kwargs) -> Message:
                    from_user=USER, text=text, **kwargs)
 
 
+class FreeTestPayments:
+    async def require(self, message, user_id):
+        return True
+
+
 async def _drive(bot_key: str, module_name: str, build_update, failure):
     """Feed one update while every gateway call raises `failure`."""
     # aiogram refuses to attach a Router to two Dispatchers, so reload the
@@ -81,6 +86,7 @@ async def _drive(bot_key: str, module_name: str, build_update, failure):
     ))
     dispatcher.include_router(router)
     dispatcher["history"] = HistoryManager(redis, bot_key)
+    dispatcher["payments"] = FreeTestPayments()
 
     async def boom(*args, **kwargs):
         raise failure

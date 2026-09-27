@@ -212,6 +212,12 @@ jobs:
       - name: Bots stay usable when the gateway fails
         run: python tests/test_degradation.py
 
+      - name: Revenue gate is atomic and unlocks paid users
+        run: python tests/test_payments.py
+
+      - name: Webhook authenticates and acknowledges before dispatch
+        run: python tests/test_webhook.py
+
       - name: Live end-to-end against a real gateway
         run: |
           # MOCK_ONLY keeps this hermetic: a real HTTP gateway with a real
@@ -384,15 +390,28 @@ jobs:
       - name: Validate YAML manifests
         run: |
           python - <<'PY'
-          import sys, yaml
-          for path in ("render.yaml", "koyeb.yaml", ".github/workflows/ci.yml", "docker-compose.yml"):
-              with open(path) as fh:
+          import pathlib, yaml
+          paths = [pathlib.Path("render.yaml"), pathlib.Path("docker-compose.yml")]
+          workflow = pathlib.Path(".github/workflows/ci.yml")
+          if workflow.exists():
+              paths.append(workflow)
+          for path in paths:
+              with path.open() as fh:
                   yaml.safe_load(fh)
               print(f"{path}: valid YAML")
+          with pathlib.Path("render.yaml").open() as fh:
+              render = yaml.safe_load(fh)
+          services = render.get("services", [])
+          assert len(services) == 1, "Render must stay a single free service"
+          assert services[0].get("type") == "web" and services[0].get("plan") == "free"
+          print("render.yaml: exactly one free web service")
           PY
 
       - name: Build contexts exclude secrets and caches
         run: |
+          test -f .dockerignore || { echo "::error::root .dockerignore is missing"; exit 1; }
+          grep -qF '.env' .dockerignore || { echo "::error::root .dockerignore does not exclude .env"; exit 1; }
+          grep -qF '.git/' .dockerignore || { echo "::error::root .dockerignore does not exclude .git"; exit 1; }
           for ctx in bots gateway; do
             test -f "$ctx/.dockerignore" || { echo "::error::$ctx/.dockerignore is missing"; exit 1; }
             for pat in '.env' '.git/'; do
@@ -408,6 +427,9 @@ jobs:
           grep -q 'runtime.state.json' gateway/.dockerignore \
             || { echo "::error::gateway/.dockerignore does not exclude runtime.state.json"; exit 1; }
 
+      - name: Build the unified hosted image
+        run: docker build --tag konkred/unified:ci --file Dockerfile .
+
       - name: The gateway must stay dependency-free
         run: |
           node -e "
@@ -420,13 +442,15 @@ jobs:
           console.log('zero runtime dependencies confirmed');
           "
 
-      - name: setup.sh must be executable and syntactically valid
+      - name: Shell entrypoints must be executable and syntactically valid
         run: |
-          test -x setup.sh || { echo "::error::setup.sh is not executable"; exit 1; }
-          bash -n setup.sh
-          echo "setup.sh ok"
+          for script in setup.sh entrypoint.sh; do
+            test -x "$script" || { echo "::error::$script is not executable"; exit 1; }
+            bash -n "$script"
+            echo "$script ok"
+          done
 
       - name: Shellcheck
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
-          shellcheck --severity=warning setup.sh
+          shellcheck --severity=warning setup.sh entrypoint.sh

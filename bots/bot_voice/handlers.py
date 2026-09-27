@@ -17,6 +17,7 @@ from aiogram.types import CallbackQuery, Message
 from shared.config import settings
 from shared.gateway_client import GatewayError, gateway, inline_data_part, text_part
 from shared.history import HistoryManager
+from shared.payments import PaymentManager
 from shared.utils import (UNEXPECTED_ERROR, clean_model_output, format_duration,
                           humanize_bytes, send_long_message)
 
@@ -116,7 +117,12 @@ async def cmd_clear(message: Message, history: HistoryManager) -> None:
 
 
 @router.message(F.voice | F.audio | F.video_note)
-async def handle_audio(message: Message, bot: Bot, history: HistoryManager) -> None:
+async def handle_audio(
+    message: Message,
+    bot: Bot,
+    history: HistoryManager,
+    payments: PaymentManager,
+) -> None:
     """Transcribe a voice note / audio file and extract actions."""
     media = message.voice or message.audio or message.video_note
     if media is None:  # pragma: no cover - guarded by the filter
@@ -128,6 +134,9 @@ async def handle_audio(message: Message, bot: Bot, history: HistoryManager) -> N
             f"📦 That file is {humanize_bytes(size)}, which exceeds my "
             f"{settings.max_file_mb} MB limit.\nPlease send a shorter recording."
         )
+        return
+
+    if not await payments.require(message, message.from_user.id):
         return
 
     duration = getattr(media, "duration", 0) or 0
@@ -200,13 +209,22 @@ async def handle_audio(message: Message, bot: Bot, history: HistoryManager) -> N
 
 
 @router.message(F.document & F.document.mime_type.in_(SUPPORTED_AUDIO))
-async def handle_audio_document(message: Message, bot: Bot, history: HistoryManager) -> None:
+async def handle_audio_document(
+    message: Message,
+    bot: Bot,
+    history: HistoryManager,
+    payments: PaymentManager,
+) -> None:
     """Audio sent as a file attachment rather than a voice note."""
-    await handle_audio(message, bot, history)
+    await handle_audio(message, bot, history, payments)
 
 
 @router.callback_query(F.data.startswith(f"{CB_PREFIX}:"))
-async def handle_callbacks(query: CallbackQuery, history: HistoryManager) -> None:
+async def handle_callbacks(
+    query: CallbackQuery,
+    history: HistoryManager,
+    payments: PaymentManager,
+) -> None:
     """Follow-up actions on the last transcription."""
     action = query.data.split(":", 1)[1]
     await query.answer()
@@ -251,6 +269,8 @@ async def handle_callbacks(query: CallbackQuery, history: HistoryManager) -> Non
     if not turns:
         await query.message.answer("I don't have a recent transcript any more. Please send the audio again.")
         return
+    if not await payments.require(query.message, query.from_user.id):
+        return
 
     thinking = await query.message.answer("✍️ Working on it…")
     try:
@@ -276,7 +296,11 @@ async def handle_callbacks(query: CallbackQuery, history: HistoryManager) -> Non
 
 
 @router.message(F.text & ~F.text.startswith("/"))
-async def handle_text(message: Message, history: HistoryManager) -> None:
+async def handle_text(
+    message: Message,
+    history: HistoryManager,
+    payments: PaymentManager,
+) -> None:
     """Free-form follow-up questions about the last transcript."""
     turns = await history.get(message.from_user.id)
     if not turns:
@@ -284,6 +308,8 @@ async def handle_text(message: Message, history: HistoryManager) -> None:
             "🎙 Send me a voice note or audio file and I'll transcribe it, "
             "summarise it and pull out the action items.\n\nUse /help for details."
         )
+        return
+    if not await payments.require(message, message.from_user.id):
         return
 
     thinking = await message.answer("💭 Thinking…")

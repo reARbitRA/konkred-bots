@@ -78,6 +78,7 @@ export const TASK_ROUTES = Object.freeze({
     'mistral:small',
     'github:gpt-4o-mini',
     'groq:gpt-oss-20b',
+    'openrouter:free-auto',
     'mock:general',
   ],
   classification: [
@@ -89,6 +90,7 @@ export const TASK_ROUTES = Object.freeze({
     'cloudflare:llama-8b',
     'groq:qwen3-27b',
     'github:gpt-4o-mini',
+    'openrouter:free-auto',
     'mock:fast',
   ],
   'bug-fixing': [

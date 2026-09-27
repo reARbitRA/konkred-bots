@@ -22,6 +22,7 @@ from aiogram.types import CallbackQuery, Message
 
 from shared.gateway_client import GatewayError, gateway
 from shared.history import HistoryManager
+from shared.payments import PaymentManager
 from shared.utils import UNEXPECTED_ERROR, clean_model_output, escape_html, send_long_message
 
 from .keyboards import CB_PREFIX, main_menu, news_menu, report_menu
@@ -182,11 +183,14 @@ async def _report(
     subject: str,
     user_id: int,
     history: HistoryManager,
+    payments: PaymentManager,
     keyboard=None,
     fusion: bool = False,
     status_text: str = "🔍 Analysing…",
 ) -> None:
     """Shared request/response path for every report type."""
+    if not await payments.require(message, user_id):
+        return
     status = await message.answer(status_text)
     try:
         report = await gateway.ask(
@@ -234,7 +238,12 @@ async def cmd_clear(message: Message, history: HistoryManager) -> None:
 
 
 @router.message(Command("scan"))
-async def cmd_scan(message: Message, command: CommandObject, history: HistoryManager) -> None:
+async def cmd_scan(
+    message: Message,
+    command: CommandObject,
+    history: HistoryManager,
+    payments: PaymentManager,
+) -> None:
     subject = _clean_subject(command.args or "")
     if not subject:
         await message.answer(
@@ -244,7 +253,7 @@ async def cmd_scan(message: Message, command: CommandObject, history: HistoryMan
         return
     if not TICKER_PATTERN.match(subject):
         # Not ticker-shaped: treat it as a topic so the user still gets an answer.
-        await cmd_sentiment_impl(message, subject, history)
+        await cmd_sentiment_impl(message, subject, history, payments)
         return
 
     ticker = subject.upper()
@@ -254,6 +263,7 @@ async def cmd_scan(message: Message, command: CommandObject, history: HistoryMan
         ticker,
         message.from_user.id,
         history,
+        payments,
         keyboard=report_menu(ticker),
         fusion=True,
         status_text=f"🔍 <b>Scanning {escape_html(ticker)}…</b>\n<i>Cross-checking across multiple models.</i>",
@@ -261,23 +271,34 @@ async def cmd_scan(message: Message, command: CommandObject, history: HistoryMan
 
 
 @router.message(Command("sentiment"))
-async def cmd_sentiment(message: Message, command: CommandObject, history: HistoryManager) -> None:
+async def cmd_sentiment(
+    message: Message,
+    command: CommandObject,
+    history: HistoryManager,
+    payments: PaymentManager,
+) -> None:
     subject = _clean_subject(command.args or "", limit=200)
     if not subject:
         await message.answer(
             "Usage: <code>/sentiment spot ETH ETF</code>\n\nGive me a narrative, event or theme to read."
         )
         return
-    await cmd_sentiment_impl(message, subject, history)
+    await cmd_sentiment_impl(message, subject, history, payments)
 
 
-async def cmd_sentiment_impl(message: Message, subject: str, history: HistoryManager) -> None:
+async def cmd_sentiment_impl(
+    message: Message,
+    subject: str,
+    history: HistoryManager,
+    payments: PaymentManager,
+) -> None:
     await _report(
         message,
         SENTIMENT_PROMPT.format(subject=subject),
         subject,
         message.from_user.id,
         history,
+        payments,
         keyboard=main_menu(),
         fusion=True,
         status_text=f"🧭 <b>Reading sentiment on {escape_html(subject)}…</b>",
@@ -285,13 +306,18 @@ async def cmd_sentiment_impl(message: Message, subject: str, history: HistoryMan
 
 
 @router.message(Command("news"))
-async def cmd_news(message: Message, history: HistoryManager) -> None:
+async def cmd_news(
+    message: Message,
+    history: HistoryManager,
+    payments: PaymentManager,
+) -> None:
     await _report(
         message,
         NEWS_PROMPT,
         "market briefing",
         message.from_user.id,
         history,
+        payments,
         keyboard=news_menu(),
         status_text="📰 <b>Building the market briefing…</b>",
     )
@@ -308,7 +334,11 @@ async def callback_menu(query: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data.startswith(f"{CB_PREFIX}:scan:"))
-async def callback_scan(query: CallbackQuery, history: HistoryManager) -> None:
+async def callback_scan(
+    query: CallbackQuery,
+    history: HistoryManager,
+    payments: PaymentManager,
+) -> None:
     await query.answer()
     ticker = _clean_subject(query.data.rsplit(":", 1)[1]).upper()
     if not ticker:
@@ -319,6 +349,7 @@ async def callback_scan(query: CallbackQuery, history: HistoryManager) -> None:
         ticker,
         query.from_user.id,
         history,
+        payments,
         keyboard=report_menu(ticker),
         fusion=True,
         status_text=f"🔍 <b>Scanning {escape_html(ticker)}…</b>",
@@ -326,16 +357,24 @@ async def callback_scan(query: CallbackQuery, history: HistoryManager) -> None:
 
 
 @router.callback_query(F.data == f"{CB_PREFIX}:news")
-async def callback_news(query: CallbackQuery, history: HistoryManager) -> None:
+async def callback_news(
+    query: CallbackQuery,
+    history: HistoryManager,
+    payments: PaymentManager,
+) -> None:
     await query.answer()
     await _report(
-        query.message, NEWS_PROMPT, "market briefing", query.from_user.id, history,
+        query.message, NEWS_PROMPT, "market briefing", query.from_user.id, history, payments,
         keyboard=news_menu(), status_text="📰 <b>Building the market briefing…</b>",
     )
 
 
 @router.callback_query(F.data == f"{CB_PREFIX}:feargreed")
-async def callback_feargreed(query: CallbackQuery, history: HistoryManager) -> None:
+async def callback_feargreed(
+    query: CallbackQuery,
+    history: HistoryManager,
+    payments: PaymentManager,
+) -> None:
     await query.answer()
     prompt = (
         "Explain the Crypto Fear & Greed Index: what the five zones mean, exactly which inputs feed it "
@@ -344,7 +383,7 @@ async def callback_feargreed(query: CallbackQuery, history: HistoryManager) -> N
         "State clearly that you cannot read today's live value and name where to check it."
     )
     await _report(
-        query.message, prompt, "fear & greed", query.from_user.id, history,
+        query.message, prompt, "fear & greed", query.from_user.id, history, payments,
         keyboard=main_menu(), status_text="😱 <b>Explaining the Fear & Greed Index…</b>",
     )
 
@@ -370,7 +409,11 @@ FOLLOWUPS = {
 
 
 @router.callback_query(F.data.regexp(rf"^{CB_PREFIX}:(debate|risk|eli5):"))
-async def callback_followup(query: CallbackQuery, history: HistoryManager) -> None:
+async def callback_followup(
+    query: CallbackQuery,
+    history: HistoryManager,
+    payments: PaymentManager,
+) -> None:
     await query.answer()
     try:
         _, action, subject = query.data.split(":", 2)
@@ -392,6 +435,7 @@ async def callback_followup(query: CallbackQuery, history: HistoryManager) -> No
         f"{action}:{subject}",
         query.from_user.id,
         history,
+        payments,
         keyboard=report_menu(subject),
         status_text=labels[action],
     )
@@ -402,7 +446,11 @@ async def callback_followup(query: CallbackQuery, history: HistoryManager) -> No
 # --------------------------------------------------------------------------- #
 
 @router.message(F.text & ~F.text.startswith("/"))
-async def handle_text(message: Message, history: HistoryManager) -> None:
+async def handle_text(
+    message: Message,
+    history: HistoryManager,
+    payments: PaymentManager,
+) -> None:
     """A bare ticker scans it; anything longer is treated as a sentiment topic."""
     subject = _clean_subject(message.text, limit=200)
     if not subject:
@@ -416,13 +464,14 @@ async def handle_text(message: Message, history: HistoryManager) -> None:
             ticker,
             message.from_user.id,
             history,
+            payments,
             keyboard=report_menu(ticker),
             fusion=True,
             status_text=f"🔍 <b>Scanning {escape_html(ticker)}…</b>",
         )
         return
 
-    await cmd_sentiment_impl(message, subject, history)
+    await cmd_sentiment_impl(message, subject, history, payments)
 
 
 __all__ = ["router"]

@@ -26,6 +26,7 @@ from aiogram.types import CallbackQuery, Message
 
 from shared.gateway_client import GatewayError, gateway, inline_data_part, text_part
 from shared.history import HistoryManager
+from shared.payments import PaymentManager
 from shared.utils import (UNEXPECTED_ERROR, clean_model_output, escape_html,
                           send_long_message)
 
@@ -306,11 +307,23 @@ async def cmd_stop(message: Message, state: FSMContext) -> None:
 
 
 @router.message(Command("test"))
-async def cmd_test(message: Message, state: FSMContext) -> None:
-    await _begin(message, state, (1, 2, 3))
+async def cmd_test(
+    message: Message,
+    state: FSMContext,
+    payments: PaymentManager,
+) -> None:
+    await _begin(message, state, (1, 2, 3), payments, message.from_user.id)
 
 
-async def _begin(message: Message, state: FSMContext, parts: tuple[int, ...]) -> None:
+async def _begin(
+    message: Message,
+    state: FSMContext,
+    parts: tuple[int, ...],
+    payments: PaymentManager,
+    user_id: int,
+) -> None:
+    if not await payments.require(message, user_id):
+        return
     plan = _build_plan(parts)
     await state.set_state(UserPhase.EXAM_IN_PROGRESS)
     await state.update_data(plan=json.dumps(plan), index=0, answers=json.dumps([]))
@@ -513,19 +526,27 @@ async def _evaluate(message: Message, state: FSMContext) -> None:
 # --------------------------------------------------------------------------- #
 
 @router.callback_query(F.data == f"{CB_PREFIX}:start")
-async def callback_start(query: CallbackQuery, state: FSMContext) -> None:
+async def callback_start(
+    query: CallbackQuery,
+    state: FSMContext,
+    payments: PaymentManager,
+) -> None:
     await query.answer()
-    await _begin(query.message, state, (1, 2, 3))
+    await _begin(query.message, state, (1, 2, 3), payments, query.from_user.id)
 
 
 @router.callback_query(F.data.startswith(f"{CB_PREFIX}:part:"))
-async def callback_part(query: CallbackQuery, state: FSMContext) -> None:
+async def callback_part(
+    query: CallbackQuery,
+    state: FSMContext,
+    payments: PaymentManager,
+) -> None:
     await query.answer()
     try:
         part = int(query.data.rsplit(":", 1)[1])
     except ValueError:
         return
-    await _begin(query.message, state, (part,))
+    await _begin(query.message, state, (part,), payments, query.from_user.id)
 
 
 @router.callback_query(F.data == f"{CB_PREFIX}:bands")
@@ -565,12 +586,18 @@ async def callback_stop(query: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.callback_query(F.data.in_({f"{CB_PREFIX}:improve", f"{CB_PREFIX}:model"}))
-async def callback_followup(query: CallbackQuery, state: FSMContext) -> None:
+async def callback_followup(
+    query: CallbackQuery,
+    state: FSMContext,
+    payments: PaymentManager,
+) -> None:
     await query.answer()
     data = await state.get_data()
     report = data.get("last_report")
     if not report:
         await query.message.answer("I don't have a recent report. Use /test to take a mock test first.")
+        return
+    if not await payments.require(query.message, query.from_user.id):
         return
 
     if query.data.endswith("improve"):
@@ -615,8 +642,14 @@ async def callback_followup(query: CallbackQuery, state: FSMContext) -> None:
 # --------------------------------------------------------------------------- #
 
 @router.message(StateFilter(None, UserPhase.IDLE, UserPhase.EVALUATION), F.text & ~F.text.startswith("/"))
-async def handle_idle(message: Message, history: HistoryManager) -> None:
+async def handle_idle(
+    message: Message,
+    history: HistoryManager,
+    payments: PaymentManager,
+) -> None:
     """Answer general IELTS questions when no test is running."""
+    if not await payments.require(message, message.from_user.id):
+        return
     thinking = await message.answer("💭 Thinking…")
     try:
         answer = await gateway.ask(

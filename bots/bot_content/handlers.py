@@ -22,6 +22,7 @@ from aiogram.types import CallbackQuery, Message
 
 from shared.gateway_client import GatewayError, gateway
 from shared.history import HistoryManager
+from shared.payments import PaymentManager
 from shared.utils import (UNEXPECTED_ERROR, clean_model_output, escape_html,
                           send_long_message, truncate)
 
@@ -256,7 +257,12 @@ async def step_platform(query: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.callback_query(F.data.startswith(f"{CB_PREFIX}:tone:"))
-async def step_tone(query: CallbackQuery, state: FSMContext, history: HistoryManager) -> None:
+async def step_tone(
+    query: CallbackQuery,
+    state: FSMContext,
+    history: HistoryManager,
+    payments: PaymentManager,
+) -> None:
     await query.answer()
     tone = query.data.rsplit(":", 1)[1]
     if tone not in TONES:
@@ -267,7 +273,7 @@ async def step_tone(query: CallbackQuery, state: FSMContext, history: HistoryMan
         )
         return
     await state.update_data(tone=tone)
-    await _generate(query.message, state, history, query.from_user.id)
+    await _generate(query.message, state, history, payments, query.from_user.id)
 
 
 @router.callback_query(F.data == f"{CB_PREFIX}:new")
@@ -294,7 +300,13 @@ async def callback_formulas(query: CallbackQuery) -> None:
 # Generation
 # --------------------------------------------------------------------------- #
 
-async def _generate(message: Message, state: FSMContext, history: HistoryManager, user_id: int) -> None:
+async def _generate(
+    message: Message,
+    state: FSMContext,
+    history: HistoryManager,
+    payments: PaymentManager,
+    user_id: int,
+) -> None:
     data = await state.get_data()
     topic = data.get("topic", "")
     platform = data.get("platform", "reels")
@@ -303,6 +315,8 @@ async def _generate(message: Message, state: FSMContext, history: HistoryManager
     if not topic:
         await state.set_state(ContentFlow.AWAITING_TOPIC)
         await message.answer("I lost the topic — what should the video be about?")
+        return
+    if not await payments.require(message, user_id):
         return
 
     status = await message.answer(
@@ -343,9 +357,14 @@ async def _generate(message: Message, state: FSMContext, history: HistoryManager
 
 
 @router.callback_query(F.data == f"{CB_PREFIX}:regen")
-async def callback_regen(query: CallbackQuery, state: FSMContext, history: HistoryManager) -> None:
+async def callback_regen(
+    query: CallbackQuery,
+    state: FSMContext,
+    history: HistoryManager,
+    payments: PaymentManager,
+) -> None:
     await query.answer("Regenerating…")
-    await _generate(query.message, state, history, query.from_user.id)
+    await _generate(query.message, state, history, payments, query.from_user.id)
 
 
 FOLLOWUP_PROMPTS = {
@@ -371,13 +390,19 @@ FOLLOWUP_PROMPTS = {
 
 
 @router.callback_query(F.data.in_({f"{CB_PREFIX}:{key}" for key in FOLLOWUP_PROMPTS}))
-async def callback_followup(query: CallbackQuery, state: FSMContext) -> None:
+async def callback_followup(
+    query: CallbackQuery,
+    state: FSMContext,
+    payments: PaymentManager,
+) -> None:
     await query.answer()
     action = query.data.split(":", 1)[1]
     data = await state.get_data()
     script = data.get("last_script")
     if not script:
         await query.message.answer("I don't have a recent script. Use /create to make one.")
+        return
+    if not await payments.require(query.message, query.from_user.id):
         return
 
     labels = {"hooks": "🪝 Writing more hooks…", "shotlist": "🎞 Building the shot list…", "series": "📅 Planning the series…"}

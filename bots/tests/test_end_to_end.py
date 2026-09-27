@@ -105,6 +105,13 @@ def _fresh_router(module_name: str):
     return importlib.import_module(module_name).router
 
 
+class FreeTestPayments:
+    """Keep handler integration tests focused on gateway behaviour."""
+
+    async def require(self, message, user_id):
+        return True
+
+
 class Harness:
     """A live dispatcher for one bot, reusable across several updates."""
 
@@ -119,6 +126,7 @@ class Harness:
         ))
         self.dispatcher.include_router(_fresh_router(module_name))
         self.dispatcher["history"] = HistoryManager(self.redis, bot_key)
+        self.dispatcher["payments"] = FreeTestPayments()
         self._update_id = 0
 
     async def feed(self, build) -> list[str]:
