@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="190" viewBox="0 0 1280 190" role="img">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#0A0B10"/>
+    <stop offset="55%" stop-color="#0B0D14"/>
+    <stop offset="100%" stop-color="#0A0B10"/>
+  </linearGradient>
+  <linearGradient id="cyanFade" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%" stop-color="#22D3EE" stop-opacity="0.85"/>
+    <stop offset="100%" stop-color="#8B5CF6" stop-opacity="0.85"/>
+  </linearGradient>
+  <linearGradient id="railGrad" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%" stop-color="#22D3EE" stop-opacity="0.0"/>
+    <stop offset="18%" stop-color="#22D3EE" stop-opacity="0.75"/>
+    <stop offset="55%" stop-color="#8B5CF6" stop-opacity="0.75"/>
+    <stop offset="85%" stop-color="#EC4899" stop-opacity="0.6"/>
+    <stop offset="100%" stop-color="#EC4899" stop-opacity="0.0"/>
+  </linearGradient>
+  <linearGradient id="panelGrad" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#141926"/>
+    <stop offset="100%" stop-color="#0E121B"/>
+  </linearGradient>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7"
+          orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#5C6678"/>
+  </marker>
+  <marker id="arrowCyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7"
+          orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#22D3EE"/>
+  </marker>
+  <marker id="arrowViolet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7"
+          orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#8B5CF6"/>
+  </marker>
+  <marker id="arrowPink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7"
+          orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#EC4899"/>
+  </marker>
+  <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7"
+          orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#10B981"/>
+  </marker>
+  
+</defs>
+<rect width="1280" height="190" fill="url(#bg)"/>
+<rect x="0.5" y="0.5" width="1279" height="189" rx="18" fill="none" stroke="#232C3C" stroke-width="1"/>
+<rect x="60" y="28" width="1160" height="3" rx="1.5" fill="url(#railGrad)"/><circle cx="148" cy="29.5" r="5" fill="#22D3EE" stroke="none" stroke-width="1" opacity="1.0"/><text x="148" y="56" font-family="'JetBrains Mono','DejaVu Sans Mono',Consolas,'Courier New',monospace" font-size="11" font-weight="700" fill="#22D3EE" text-anchor="middle">content</text><text x="148" y="74" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="400" fill="#8A94A6" text-anchor="middle">Viral Hook Architect</text><circle cx="396" cy="29.5" r="5" fill="#8B5CF6" stroke="none" stroke-width="1" opacity="1.0"/><text x="396" y="56" font-family="'JetBrains Mono','DejaVu Sans Mono',Consolas,'Courier New',monospace" font-size="11" font-weight="700" fill="#8B5CF6" text-anchor="middle">pdf</text><text x="396" y="74" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="400" fill="#8A94A6" text-anchor="middle">Deep Document Assistant</text><circle cx="644" cy="29.5" r="5" fill="#10B981" stroke="none" stroke-width="1" opacity="1.0"/><text x="644" y="56" font-family="'JetBrains Mono','DejaVu Sans Mono',Consolas,'Courier New',monospace" font-size="11" font-weight="700" fill="#10B981" text-anchor="middle">voice</text><text x="644" y="74" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="400" fill="#8A94A6" text-anchor="middle">Voice-to-Action</text><circle cx="892" cy="29.5" r="5" fill="#F59E0B" stroke="none" stroke-width="1" opacity="1.0"/><text x="892" y="56" font-family="'JetBrains Mono','DejaVu Sans Mono',Consolas,'Courier New',monospace" font-size="11" font-weight="700" fill="#F59E0B" text-anchor="middle">ielts</text><text x="892" y="74" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="400" fill="#8A94A6" text-anchor="middle">IELTS Speaking Coach</text><circle cx="1140" cy="29.5" r="5" fill="#EC4899" stroke="none" stroke-width="1" opacity="1.0"/><text x="1140" y="56" font-family="'JetBrains Mono','DejaVu Sans Mono',Consolas,'Courier New',monospace" font-size="11" font-weight="700" fill="#EC4899" text-anchor="middle">crypto</text><text x="1140" y="74" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="400" fill="#8A94A6" text-anchor="middle">Alpha Scanner</text><text x="640" y="118" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="17" font-weight="700" fill="#E6EAF2" text-anchor="middle" letter-spacing="3">KONKRED BOT FLEET</text><text x="640" y="140" font-family="'JetBrains Mono','DejaVu Sans Mono',Consolas,'Courier New',monospace" font-size="11.5" font-weight="400" fill="#8A94A6" text-anchor="middle">one process · one gateway · one payment rail · five products</text><text x="640" y="164" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="400" fill="#5C6678" text-anchor="middle">MIT licensed · verified locally: 55 gateway tests, 25 degradation scenarios, 12 live end-to-end steps</text>
+</svg>

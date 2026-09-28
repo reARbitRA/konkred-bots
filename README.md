@@ -1,583 +1,453 @@
 <div align="center">
 
-<img src="assets/readme/hero.svg" width="100%" alt="Konkred — Multi-Bot AI Ecosystem">
-
-# Konkred — Multi-Bot AI Ecosystem
-
-**Five production Telegram bots, one Python process, zero inference spend.**
-
-<br>
-
-<a href="#quick-start"><img src="https://img.shields.io/badge/▶_Quick_start-5_steps-22D3EE?style=for-the-badge&labelColor=0A0B10" alt="Quick start"></a>
-<a href="#architecture"><img src="https://img.shields.io/badge/◈_Architecture-3_tiers-8B5CF6?style=for-the-badge&labelColor=0A0B10" alt="Architecture"></a>
-<a href="#gateway-http-api"><img src="https://img.shields.io/badge/⇄_Gateway_API-7_routes-EC4899?style=for-the-badge&labelColor=0A0B10" alt="Gateway API"></a>
-<a href="#deployment"><img src="https://img.shields.io/badge/☁_Deploy-free_tier-10B981?style=for-the-badge&labelColor=0A0B10" alt="Deploy"></a>
-
-<br><br>
-
-<img src="https://img.shields.io/badge/Node.js-20_·_ESM-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white&labelColor=0A0B10" alt="Node 20">
-<img src="https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white&labelColor=0A0B10" alt="Python 3.11">
-<img src="https://img.shields.io/badge/Aiogram-3.15-2AABEE?style=flat-square&logo=telegram&logoColor=white&labelColor=0A0B10" alt="Aiogram 3.15">
-<img src="https://img.shields.io/badge/Redis-7--alpine-FF4438?style=flat-square&logo=redis&logoColor=white&labelColor=0A0B10" alt="Redis 7">
-<img src="https://img.shields.io/badge/Docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white&labelColor=0A0B10" alt="Docker">
-<br>
-<img src="https://img.shields.io/badge/gateway_deps-0-10B981?style=flat-square&labelColor=0A0B10" alt="Zero dependencies">
-<img src="https://img.shields.io/badge/model_slots-16-8B5CF6?style=flat-square&labelColor=0A0B10" alt="16 model slots">
-<img src="https://img.shields.io/badge/providers-8-22D3EE?style=flat-square&labelColor=0A0B10" alt="8 providers">
-<img src="https://img.shields.io/badge/task_types-8-C084FC?style=flat-square&labelColor=0A0B10" alt="8 task types">
-<img src="https://img.shields.io/badge/tests-55_passing-34D399?style=flat-square&labelColor=0A0B10" alt="55 tests passing">
-<img src="https://img.shields.io/badge/license-MIT-E6EAF2?style=flat-square&labelColor=0A0B10" alt="MIT license">
+<img src="assets/readme/hero-fleet.svg" width="100%" alt="Konkred bot fleet — five Telegram products on one shared Python runtime, one Redis, one payment rail and one Node AI gateway">
 
 </div>
 
-<img src="assets/readme/divider.svg" width="100%" alt="">
+**Konkred is not five scripts. It is one platform that happens to expose five Telegram products.**
+One Python process runs every bot, one Redis holds every conversation and every state machine,
+one payment gate counts every free action, and one Node.js gateway decides which model answers.
+Adding a sixth product means adding a router and a token — not another deployment.
 
-Everything routes through a purpose-built **AI gateway** that pools free-tier
-credentials across eight providers, tracks every published rate limit in real
-time, and falls back across models when a key rate-limits, a provider stalls, or
-a request exceeds a context window. The bots never speak to a model vendor
-directly — they speak to the gateway, and the gateway decides who answers.
+<table>
+<tr>
+<td width="20%" valign="top"><b>Products</b><br>Content · PDF · Voice · IELTS · Crypto</td>
+<td width="20%" valign="top"><b>Runtime</b><br>Python 3.11 · Aiogram 3.15<br>one asyncio loop</td>
+<td width="20%" valign="top"><b>State</b><br>Redis 7 · history + FSM<br>namespaced per bot</td>
+<td width="20%" valign="top"><b>Inference</b><br>Node 20 ESM gateway<br>8 providers · 16 model slots</td>
+<td width="20%" valign="top"><b>Verification</b><br>55 + 25 + 12 checks<br>run locally, listed below</td>
+</tr>
+</table>
 
-<div align="center">
-<img src="assets/readme/architecture.svg" width="100%" alt="Three-tier architecture: Telegram to the Python bot daemon, to Redis and the Node gateway, out to eight AI providers">
-</div>
+**Jump to** &nbsp;
+[The fleet](#the-fleet) ·
+[Five products](#five-products) ·
+[Shared runtime](#shared-runtime) ·
+[Isolation](#handler-and-keyboard-isolation) ·
+[Memory & FSM](#shared-memory-and-fsm) ·
+[Payments](#payments) ·
+[Gateway](#gateway-routing) ·
+[Providers](#provider-fallback) ·
+[Degradation](#degradation-handling) ·
+[Webhooks](#webhooks) ·
+[Docker](#docker) ·
+[CI & testing](#ci-and-testing) ·
+[Deployment](#deployment)
 
-<details markdown="1">
-<summary><b>Plain-text architecture</b> — copy-paste friendly</summary>
+---
 
-<br>
+# The fleet
+
+Every Telegram product in this repository is an Aiogram `Router` plus a keyboard module. Nothing
+else. The parts that are hard to get right — memory, state, payments, retries, quota accounting,
+model selection, graceful failure — live once, in shared modules, and every product inherits them.
+
+| Layer | What it is | Where it lives |
+|---|---|---|
+| Products | 5 routers, 60 feature handlers, 17 inline keyboards | `bots/bot_*/` |
+| Shared services | config · history · payments · gateway client · utils | `bots/shared/` |
+| Orchestrator | builds one `Bot` + `Dispatcher` per configured token | `bots/main.py` |
+| State | Redis 7 — conversation windows, FSM data, payment ledger | `docker-compose.yml` |
+| Inference | quota-aware multi-provider gateway, zero npm dependencies | `gateway/` |
+
+A product starts only when its token is set. `get_active_bots()` filters `BOT_SPECS` on a
+non-empty token, so running one bot or all five is the same command and the same image.
+
+### Fleet command surface
+
+Every product exposes `/help`, `/clear` and `/paysupport`; the rest is product-specific. `/clear`
+wipes only that product's conversation window, and `/paysupport` is served by the shared payment
+router rather than by any individual bot.
+
+| Command | Content | PDF | Voice | IELTS | Crypto | Served by |
+|---|:--:|:--:|:--:|:--:|:--:|---|
+| `/start` | ✅ | ✅ | ✅ | ✅ | ✅ | product router |
+| `/help` | ✅ | ✅ | ✅ | ✅ | ✅ | product router |
+| `/clear` | ✅ | ✅ | ✅ | ✅ | ✅ | product router → `HistoryManager` |
+| `/paysupport` | ✅ | ✅ | ✅ | ✅ | ✅ | **shared** payment router |
+| `/create` · `/formulas` · `/cancel` | ✅ | — | — | — | — | content FSM |
+| `/test` · `/bands` · `/stop` | — | — | — | ✅ | — | IELTS FSM |
+| `/scan` · `/sentiment` · `/news` | — | — | — | — | ✅ | crypto commands |
+| `/verify <txid>` | ✅ | ✅ | ✅ | ✅ | ✅ | **shared** payment router (USDT path, off by default) |
+
+### Capability matrix
+
+| Capability | Content | PDF | Voice | IELTS | Crypto |
+|---|:--:|:--:|:--:|:--:|:--:|
+| Accepts audio uploads | — | — | ✅ | ✅ | — |
+| Accepts document uploads | — | ✅ | — | — | — |
+| Finite state machine | ✅ 3 | — | — | ✅ 3 | — |
+| Structured output validated before rendering | — | ✅ quiz | — | ✅ bands | — |
+| Multi-model fusion | — | — | — | — | ✅ scans |
+| Mandatory disclaimer on every reply | — | — | — | — | ✅ |
+| Gateway task lane | `code-generation` | `spec-generation` | `summarization` | `general` + `summarization` | `classification` |
+
+### Inline keyboard inventory
+
+Seventeen keyboards, all built from plain `InlineKeyboardMarkup` with a per-product callback
+prefix — no keyboard module imports another product's prefix.
+
+| Product | Prefix | Keyboards |
+|---|---|---|
+| Content | `content:` | main menu · platform picker · tone picker · result actions |
+| PDF | `pdf:` | document actions · quiz answers · next question · finish |
+| Voice | `voice:` | main menu · result actions · retry |
+| IELTS | `ielts:` | main menu · exam controls · evaluation menu |
+| Crypto | `crypto:` | main menu · report menu · news menu |
+
+<img src="assets/readme/five-bot-deck.svg" width="100%" alt="Identity cards for the five Telegram products, with handler counts, keyboards, FSM states and gateway task lanes">
+
+# Five products
+
+### Viral Hook Architect — `TELEGRAM_CONTENT_BOT_TOKEN`
+
+A three-step FSM: topic → platform → tone. Returns three hooks, a beat-by-beat 30-second script
+with timestamps, and an SEO caption. Follow-up buttons regenerate, produce more hooks, a shot list
+or a 7-day series.
 
 ```
-Telegram ──► bots (Python 3.11 · Aiogram 3.15)     one process, five bots
-                │
-                ├──► redis     conversation memory + FSM state
-                │
-                └──► gateway (Node 20 · zero deps)
-                          │  key pool · router · cache · dedup · fallback
-                          ▼
-              Gemini · Groq · Cerebras · Mistral · OpenRouter
-              Cloudflare · GitHub Models · built-in mock
+/create → AWAITING_TOPIC → AWAITING_PLATFORM → AWAITING_TONE → gateway(code-generation)
+          topic text        Reels/TikTok/Shorts   4 tones        3 hooks + 30s beat script + SEO caption
+                                                                 ↳ regenerate · more hooks · shot list · 7-day series
 ```
 
-</details>
+`/create` `/formulas` `/cancel` `/help` `/clear` `/paysupport` — 8 message handlers, 7 callback
+handlers, 4 keyboards, 3 FSM states, routed on the `code-generation` lane.
 
-<table>
-<tr>
-<td width="33%" valign="top">
+### Deep Document Assistant — `TELEGRAM_PDF_BOT_TOKEN`
 
-### ◈ Never a dead end
+Accepts PDF, DOCX, TXT and MD. Inline buttons produce an executive summary, a **validated**
+five-question quiz (option counts, answer indices and types are checked field by field before a
+keyboard is built), flashcards, a contract-risk analysis, key terms or a figures extract.
 
-Eight task types, each with a ranked
-candidate chain up to **12 models deep**,
-every one ending in a local mock tail.
-A chain physically cannot run out.
+```
+document upload → extract text (pypdf · python-docx · plain) → FSM data
+                → summary | quiz | flashcards | risk | key terms | figures
+                  quiz → validate options/indices → answer buttons → score → next question
+```
 
-</td>
-<td width="33%" valign="top">
+`/start` `/help` `/clear` `/paysupport` — 5 message handlers, 6 callback handlers, 4 keyboards,
+routed on the `spec-generation` lane, whose chain leads with Gemini Flash and its 1M context.
 
-### ⚡ Never over quota
+### Voice-to-Action — `TELEGRAM_VOICE_BOT_TOKEN`
 
-Admission stops at **85% RPM**, 90% TPM,
-95% RPD, 98% TPD of every published
-ceiling — with timezone-aware daily
-resets and self-calibrating watchdog.
+Send a voice note, an audio file or a video note. Returns a cleaned transcription, a structured
+summary, and an `[ACTION]` / `[DECISION]` / `[QUESTION]` list with owners and deadlines. Audio is
+streamed into memory and never written to disk. Result buttons re-cut the same audio into action
+items only, a draft reply, an English translation or formal minutes.
 
-</td>
-<td width="33%" valign="top">
+```
+voice note / audio / video note → download to memory → inline audio part → gateway(summarization)
+                                → transcript + summary + [ACTION]/[DECISION]/[QUESTION] list
+                                  ↳ action items only · draft reply · translate · minutes
+```
 
-### ⬡ Never a blank reply
+`/start` `/help` `/clear` `/paysupport` — 6 message handlers, 1 callback handler, 3 keyboards,
+routed on the `summarization` lane.
 
-Empty completions raise typed errors.
-`SAFETY`, `RECITATION`, `BLOCKLIST` and
-`content_filter` each continue the chain
-instead of handing back a blank message.
+### IELTS Speaking Coach — `TELEGRAM_IELTS_BOT_TOKEN`
 
-</td>
-</tr>
-</table>
+A full three-part mock interview driven by `UserPhase` (`IDLE → EXAM_IN_PROGRESS → EVALUATION`).
+Scores the four official criteria — Fluency & Coherence, Lexical Resource, Grammatical Range &
+Accuracy, Pronunciation — and returns a band from 1.0 to 9.0, then offers improvement notes and
+model answers. Answers may be typed or spoken.
 
-<img src="assets/readme/divider.svg" width="100%" alt="">
+```
+/test → EXAM_IN_PROGRESS  part 1 (7 questions) → part 2 (long turn) → part 3 (discussion)
+      → EVALUATION        four criteria scored → band 1.0-9.0 → improvement notes · model answers
+```
 
-## Table of contents
+`/test` `/bands` `/stop` `/help` `/clear` `/paysupport` — 9 message handlers, 6 callback handlers,
+3 keyboards, 3 FSM states, routed on `general` with `summarization` for spoken answers.
 
-<table>
-<tr>
-<td valign="top" width="33%">
+### Alpha Scanner — `TELEGRAM_CRYPTO_BOT_TOKEN`
 
-**Getting started**
-- [The bots](#the-bots)
-- [Quick start](#quick-start)
-- [Local development](#local-development)
-- [Testing](#testing)
+Market sentiment scored 1–100 with the drivers behind it, whale-activity notes and an explicit
+risk warning. Report buttons produce a bull-vs-bear debate, a risk checklist or a plain-language
+explanation. Multi-model fusion is enabled for scans, and every reply carries a *not financial
+advice* disclaimer.
 
-</td>
-<td valign="top" width="33%">
+```
+/scan BTC → gateway(classification, fusion=true) → sentiment 1-100 + drivers + whale notes + risk
+          → bull vs bear · risk checklist · explain simply · rescan        (disclaimer appended)
+```
 
-**How it works**
-- [Architecture](#architecture)
-  - [Tier 1 — Redis](#tier-1--redis)
-  - [Tier 2 — The AI gateway](#tier-2--the-ai-gateway)
-  - [Tier 3 — The bot daemon](#tier-3--the-bot-daemon)
-- [Gateway HTTP API](#gateway-http-api)
-- [Revenue gate](#revenue-gate)
-
-</td>
-<td valign="top" width="33%">
-
-**Running it**
-- [Configuration](#configuration)
-- [Security model](#security-model)
-- [Deployment](#deployment)
-- [Operations](#operations)
-- [Troubleshooting](#troubleshooting)
-- [Repository layout](#repository-layout)
-
-</td>
-</tr>
-</table>
-
-<img src="assets/readme/divider.svg" width="100%" alt="">
-
-## The bots
-
-Each bot is an independently routed Aiogram `Router`, but they all run inside a
-single asyncio process and share one HTTP pool and one Redis connection.
-
-<table>
-<tr>
-<td width="86" align="center" valign="middle">
-<img src="assets/readme/icons/voice.svg" width="70" alt="">
-</td>
-<td valign="top">
-
-### 🎙 Voice-to-Action
-<code>TELEGRAM_VOICE_BOT_TOKEN</code>
-
-Send a voice note or audio file. Returns a cleaned transcription, a structured summary, and an `[ACTION]` / `[DECISION]` / `[QUESTION]` list with owners and deadlines. Audio is streamed to memory and never written to disk.
-
-`/start` &nbsp;`/help` &nbsp;`/clear` &nbsp;`/paysupport`
-
-</td>
-</tr>
-<tr>
-<td width="86" align="center" valign="middle">
-<img src="assets/readme/icons/document.svg" width="70" alt="">
-</td>
-<td valign="top">
-
-### 📄 Deep Document Assistant
-<code>TELEGRAM_PDF_BOT_TOKEN</code>
-
-Send a PDF, TXT, MD or DOCX. Inline buttons produce an executive summary, a validated 5-question quiz with answer callbacks, flashcards, or a contract-risk analysis.
-
-`/start` &nbsp;`/help` &nbsp;`/clear` &nbsp;`/paysupport`
-
-</td>
-</tr>
-<tr>
-<td width="86" align="center" valign="middle">
-<img src="assets/readme/icons/ielts.svg" width="70" alt="">
-</td>
-<td valign="top">
-
-### 🎓 IELTS Speaking Coach
-<code>TELEGRAM_IELTS_BOT_TOKEN</code>
-
-A full three-part mock interview driven by an FSM. Scores all four official criteria — Fluency &amp; Coherence, Lexical Resource, Grammatical Range &amp; Accuracy, Pronunciation — and returns a band from 1.0 to 9.0.
-
-`/test` &nbsp;`/bands` &nbsp;`/stop` &nbsp;`/help` &nbsp;`/clear` &nbsp;`/paysupport`
-
-</td>
-</tr>
-<tr>
-<td width="86" align="center" valign="middle">
-<img src="assets/readme/icons/content.svg" width="70" alt="">
-</td>
-<td valign="top">
-
-### 🎬 Viral Hook Architect
-<code>TELEGRAM_CONTENT_BOT_TOKEN</code>
-
-Pick a topic, a platform (Reels / TikTok / Shorts) and a tone. Returns three scroll-stopping hooks, a beat-by-beat 30-second script with timestamps, and an SEO caption with hashtags.
-
-`/create` &nbsp;`/formulas` &nbsp;`/cancel` &nbsp;`/help` &nbsp;`/clear` &nbsp;`/paysupport`
-
-</td>
-</tr>
-<tr>
-<td width="86" align="center" valign="middle">
-<img src="assets/readme/icons/crypto.svg" width="70" alt="">
-</td>
-<td valign="top">
-
-### 📊 Alpha Scanner
-<code>TELEGRAM_CRYPTO_BOT_TOKEN</code>
-
-Market sentiment scored 1–100 with the drivers behind it, whale-activity notes and an explicit risk warning. Multi-model fusion is enabled for scans. Every reply carries a *not financial advice* disclaimer.
-
-`/scan <ticker>` &nbsp;`/sentiment <topic>` &nbsp;`/news` &nbsp;`/help` &nbsp;`/clear` &nbsp;`/paysupport`
-
-</td>
-</tr>
-</table>
-
-<details markdown="1">
-<summary><b>The same five bots as a plain table</b></summary>
-
-<br>
-
-| Bot | Token variable | What it does | Commands |
-|---|---|---|---|
-| 🎙 **Voice-to-Action** | `TELEGRAM_VOICE_BOT_TOKEN` | Send a voice note or audio file. Returns a cleaned transcription, a structured summary, and an `[ACTION]` / `[DECISION]` / `[QUESTION]` list with owners and deadlines. Audio is streamed to memory and never written to disk. | `/start` `/help` `/clear` `/paysupport` |
-| 📄 **Deep Document Assistant** | `TELEGRAM_PDF_BOT_TOKEN` | Send a PDF, TXT, MD or DOCX. Inline buttons produce an executive summary, a validated 5-question quiz with answer callbacks, flashcards, or a contract-risk analysis. | `/start` `/help` `/clear` `/paysupport` |
-| 🎓 **IELTS Speaking Coach** | `TELEGRAM_IELTS_BOT_TOKEN` | A full three-part mock interview driven by an FSM. Scores all four official criteria — Fluency & Coherence, Lexical Resource, Grammatical Range & Accuracy, Pronunciation — and returns a band from 1.0 to 9.0. | `/test` `/bands` `/stop` `/help` `/clear` `/paysupport` |
-| 🎬 **Viral Hook Architect** | `TELEGRAM_CONTENT_BOT_TOKEN` | Pick a topic, a platform (Reels / TikTok / Shorts) and a tone. Returns three scroll-stopping hooks, a beat-by-beat 30-second script with timestamps, and an SEO caption with hashtags. | `/create` `/formulas` `/cancel` `/help` `/clear` `/paysupport` |
-| 📊 **Alpha Scanner** | `TELEGRAM_CRYPTO_BOT_TOKEN` | Market sentiment scored 1–100 with the drivers behind it, whale-activity notes and an explicit risk warning. Multi-model fusion is enabled for scans. Every reply carries a *not financial advice* disclaimer. | `/scan <ticker>` `/sentiment <topic>` `/news` `/help` `/clear` `/paysupport` |
-
-</details>
+`/scan <ticker>` `/sentiment <topic>` `/news` `/help` `/clear` `/paysupport` — 7 message handlers,
+5 callback handlers, 3 keyboards, routed on the `classification` lane.
 
 > [!TIP]
-> **Set only the tokens you want.** `get_active_bots()` filters on a non-empty
-> token, so a bot with no token simply never starts — no errors, no placeholder
-> process.
+> Gemini is the only configured provider with native audio and document understanding. The voice
+> and document products give their best results with at least one `GEMINI_KEY_*` present; without
+> one they still answer, further down their candidate chain.
 
-<img src="assets/readme/divider.svg" width="100%" alt="">
+# Shared runtime
 
-## Quick start
+<img src="assets/readme/shared-runtime.svg" width="100%" alt="One Python process containing five dispatchers above a shared service rail of config, history, payments, gateway client and utils, over Redis and the Node gateway">
 
-### Prerequisites
+`bots/main.py` is the whole orchestrator. For each configured token it builds a `Bot`, a
+`Dispatcher` with a `RedisStorage` whose key prefix is namespaced to that product, includes the
+payment router and then the feature router, and injects the per-bot dependencies through
+dispatcher workflow data:
 
-- Docker with the Compose plugin (`docker compose version`)
-- At least one Telegram bot token from [@BotFather](https://t.me/BotFather)
-- Optionally one or more free AI provider keys — without any, the gateway serves
-  deterministic mock responses so you can still exercise the whole stack
-
-### Five steps
-
-```bash
-# 1. Clone
-git clone https://github.com/reARbitRA/konkred-bots.git
-cd konkred-bots
-
-# 2. Create your env file (this also happens automatically on first run)
-cp .env.example .env
-
-# 3. Add at least one bot token and ideally one provider key
-#    TELEGRAM_VOICE_BOT_TOKEN=123456:ABC-DEF...
-#    GEMINI_KEY_P1=AIza...
-$EDITOR .env
-
-# 4. Build and start everything
-./setup.sh
-
-# 5. Open Telegram and send /start to your bot
+```python
+dispatcher["history"]  = HistoryManager(redis_client, spec.history_prefix)
+dispatcher["payments"] = PaymentManager(redis_client, spec)
+dispatcher["bot_spec"] = spec
 ```
 
-`setup.sh` verifies Docker is running, creates `.env` from the template if it is
-missing, reports which bots are configured and which will stay offline, warns
-when no provider keys are present, validates the compose file, builds, starts,
-and waits for the gateway to report healthy.
+One `redis.asyncio.Redis` pool and one `httpx.AsyncClient` serve all five products. Shutdown is
+single-owner: one `SIGINT`/`SIGTERM` handler stops the pollers or drains in-flight webhook tasks,
+closes each Telegram session and the gateway client, then releases the Redis pool.
 
-```bash
-./setup.sh            # build + start + health report
-./setup.sh --logs     # ...then follow logs
-./setup.sh --status   # health only, no rebuild
-./setup.sh --down     # stop the stack
-```
-
-### Verify it is up
-
-```bash
-curl localhost:3000/api/health     # status, ready slots, cache stats
-curl localhost:3000/api/models     # 16 model slots, 8 task types
-docker compose logs -f bot         # watch the bots poll Telegram
-```
-
-> [!NOTE]
-> A `degraded` health status is normal and expected when you have not supplied any
-> real provider credentials: it means the pool is alive but only the mock provider
-> is ready. The service only returns `503` when the pool is genuinely empty.
-
-<img src="assets/readme/divider.svg" width="100%" alt="">
-
-## Architecture
-
-Three services on a private bridge network, started in dependency order with
-real healthchecks — `gateway` waits for `redis` to pass `redis-cli ping`, and
-`bot` waits for the gateway's `/api/health` to pass.
-
-```mermaid
-flowchart LR
-    subgraph T3["TIER 3 · bots"]
-        direction TB
-        B["Python 3.11<br/>Aiogram 3.15<br/><i>one event loop</i>"]
-    end
-    subgraph T1["TIER 1 · state"]
-        R[("Redis 7<br/>history + FSM")]
-    end
-    subgraph T2["TIER 2 · gateway"]
-        direction TB
-        G["Node 20 · ESM<br/><i>zero dependencies</i>"]
-        K["key pool"] --- RT["router"]
-        C["cache"] --- D["dedup"]
-        F["fallback"] --- W["watchdog"]
-    end
-    TG(["Telegram"]) <--> B
-    B <--> R
-    B --> G
-    G --> K
-    G --> P{{"8 providers<br/>16 model slots"}}
-
-    classDef tier fill:#10131B,stroke:#232C3C,color:#E6EAF2
-    classDef edge fill:#0F1620,stroke:#1F3A46,color:#67E8F9
-    class B,G,K,RT,C,D,F,W tier
-    class TG,R,P edge
-```
-
-### Tier 1 — Redis
-
-`redis:7-alpine`, append-only persistence with `everysec` fsync, capped at 256 MB
-with an `allkeys-lru` eviction policy, and a named volume so state survives
-restarts. It holds two things:
-
-**Conversation memory** — `HistoryManager` keeps a sliding window of the last 10
-turns per user per bot, JSON-encoded with a 24-hour TTL:
-
-```
-konkred:hist:{bot}:{user_id}
-```
-
-**FSM state** — Aiogram's `RedisStorage` with a `DefaultKeyBuilder` whose prefix
-is namespaced per bot and which includes the bot id:
-
-```
-konkred:fsm:{bot}:{bot_id}:{chat_id}:{user_id}:data
-```
-
-Both namespaces are verified isolated by tests: identical user ids in different
-bots never see each other's history or state.
-
-### Tier 2 — The AI gateway
-
-Node.js 20, ESM, **zero runtime dependencies** — native `node:http`, no Express,
-no SDKs. Roughly 5,000 lines across eight focused modules.
-
-<div align="center">
-<img src="assets/readme/chart-pipeline.svg" width="100%" alt="Request lifecycle: validate, fair use, cache, dedup, route, admit slot, dispatch, classify — with a recovery loop back to slot admission">
-</div>
-
-#### Quota registry
-
-`gateway/data/policies.registry.json` (version `2026.09.1`) encodes the published
-free-tier limits of **16 model slots across 8 providers**:
-
-| Provider | Models |
-|---|---|
-| Gemini | `flash`, `flash-lite` |
-| Groq | `gpt-oss-120b`, `gpt-oss-20b`, `qwen3-27b` |
-| Cerebras | `gpt-oss-120b`, `llama-8b`, `qwen3-235b` |
-| Mistral | `small`, `codestral` |
-| OpenRouter | `free-auto` — their auto-router over whatever is free today |
-| Cloudflare | `llama-8b` |
-| GitHub Models | `gpt-4o`, `gpt-4o-mini` |
-| Mock | `general`, `fast` |
-
-Every entry declares RPM, TPM, RPD and TPD, a context window, and capability
-flags (multimodal, JSON mode, tool use). CI validates the registry on every push:
-no duplicate keys, no missing fields, no references to unknown providers, and —
-importantly — no task route pointing at a model the registry no longer contains.
-
-> [!IMPORTANT]
-> **Model ids drift.** Providers retire model names on a rolling schedule (Groq
-> alone retired five of the ids this registry originally shipped with). The
-> gateway is built to survive that: an upstream that answers "this model has
-> been decommissioned" is classified `model_unavailable`, the model is benched
-> for 24h, and the request **transparently continues to the next candidate**
-> rather than failing. The log line tells you which entry to update. Refresh the
-> registry against each provider's docs every few months.
-
-#### Key pool
-
-One **slot** per `(provider, model, credential)` triple. Each slot maintains a
-60-second sliding `minuteLog` and a 30-day `monthLog`, and resets daily counters
-on a timezone-aware boundary — **midnight Pacific for Gemini**, UTC for everyone
-else, because that is what the vendors actually do.
-
-Admission uses deliberate **headroom** rather than the raw published limit, so
-clock skew and concurrent instances cannot push you over:
-
-<div align="center">
-<img src="assets/readme/chart-headroom.svg" width="100%" alt="Headroom gauges: RPM 85 percent, TPM 90 percent, RPD 95 percent, TPD 98 percent">
-</div>
-
-| Window | Headroom |
-|---|---|
-| RPM | 85% |
-| TPM | 90% |
-| RPD | 95% |
-| TPD | 98% |
-
-On a `429` the slot enters exponential backoff — `base · 2^(errors−1)` with
-±10% jitter — and the pool moves on without waiting.
-
-#### Router
-
-Eight task types map to ranked candidate chains:
-
-```
-general · code-generation · spec-generation · summarization
-classification · bug-fixing · architecture · translate
-```
-
-<div align="center">
-<img src="assets/readme/chart-routes.svg" width="100%" alt="Candidate chain depth per task type, from 7 to 12 models, each ending in a mock tail">
-</div>
-
-<sub>Regenerate this chart straight from the router with
-<code>node assets/readme/build-route-chart.mjs</code> — it reads <code>TASK_ROUTES</code>, so the
-diagram can never drift from the code.</sub>
-
-Requests are sized in tokens (≈3.6 chars/token) and **context windows are
-validated before a slot is assigned**, so a request too large for a model is
-never dispatched to it.
-
-#### Fallback engine
-
-Every failure is classified, and each class has a distinct recovery:
-
-<div align="center">
-<img src="assets/readme/chart-fallback.svg" width="100%" alt="Error classification mapped to recovery actions: rate limit, auth, context length, safety block, model unavailable, server timeout, empty completion, bad request">
-</div>
-
-| Error class | Action |
-|---|---|
-| `rate_limit` | cool the slot down, try the next candidate |
-| `auth` | disable the slot for the process lifetime |
-| `context_length` | raise the context requirement and re-plan |
-| `safety_block` | bench that specific model for 5 minutes |
-| `model_unavailable` | retired/unknown model id — bench it for 24h, keep the credential healthy |
-| `server` / `timeout` | bench the whole provider, with strikes |
-| `bad_request` | abort — the request itself is malformed, so retrying wastes quota |
-
-Empty completions are not silently returned: a response with a `SAFETY`,
-`RECITATION`, `BLOCKLIST` or `content_filter` finish reason raises a typed error
-so the chain continues to the next candidate instead of handing the user a blank
-message.
-
-#### Cache and dedup
-
-The **cache** keys on a SHA-256 of `{taskType, messages, model, temperature,
-maxTokens, privacy}` — an LRU of 500 entries with a 600-second TTL. Requests
-marked `privacy` are never cached.
-
-**In-flight deduplication** collapses identical concurrent requests into one
-upstream call via a `Map<string, {startedAt, promise, timer}>` with a hard
-180-second TTL. The eviction timers are `unref()`ed so they never hold the event
-loop open.
-
-#### Watchdog
-
-Every 60 seconds the watchdog rolls sliding windows forward, releases expired
-cooldowns, and **self-calibrates**: when a provider returns a `429` earlier than
-the registry predicted, the observed ceiling is recorded and respected from then
-on. State is persisted to `gateway/data/runtime.state.json` so daily counters
-survive a restart.
-
-### Tier 3 — The bot daemon
-
-One Python process, one `asyncio` event loop. `main.py` opens a single
-`redis.asyncio.Redis`, builds one `Bot` + `Dispatcher` per configured token, and
-attaches that bot's router, namespaced `HistoryManager`, and `PaymentManager`
-through dispatcher DI.
-
-The transport is selected with `BOT_MODE`:
-
-- **`webhook`** — aiohttp receives Telegram POSTs at a secret per-bot route,
-  validates Telegram's secret header, schedules dispatch in the background, and
-  returns `200 OK` immediately. This is the Render mode.
-- **`polling`** — every dispatcher long-polls Telegram concurrently. aiohttp
-  still serves `/healthz` for local Compose or a paid always-on container host.
-
-Shared infrastructure lives in `bots/shared/`:
-
-- **`config.py`** — loads `.env`, exposes typed settings and `BOT_SPECS`, and
-  `get_active_bots()` returns only bots whose token is actually set
-- **`gateway_client.py`** — a singleton `httpx.AsyncClient`
-  (`max_keepalive_connections=20`, 120 s timeout) with a typed `GatewayError`
-  carrying `status_code`, `code`, `message` and `retry_after`. It retries only
-  what is worth retrying — `502`/`504` and the codes `all_candidates_failed`,
-  `all_slots_rate_limited`, `internal_error` — with capped backoff
-  `min(4.0, 0.75 · 2^attempt)`
-- **`history.py`** — the Redis sliding-window memory described above
-- **`payments.py`** — atomic free-use counters, signed Stars invoices,
-  auto-unlock on payment, and optional admin-approved USDT verification
-- **`utils.py`** — `split_telegram_message()` respects Telegram's 4096-character
-  ceiling, splitting on paragraph breaks first, then line breaks, then spaces,
-  and only hard-slicing a genuinely unbreakable run of characters
-
-Shutdown is graceful and single-owner: one `SIGINT`/`SIGTERM` handler stops
-pollers or drains in-flight webhook tasks, closes Telegram and gateway HTTP
-sessions, and releases the Redis pool.
-
-<img src="assets/readme/divider.svg" width="100%" alt="">
-
-## Gateway HTTP API
-
-| Method | Path | Purpose |
+| Shared module | Responsibility | Used by |
 |---|---|---|
-| `POST` | `/api/ai` | Run a completion |
-| `GET` | `/api/health` | Liveness, ready slots, cache stats |
-| `GET` | `/api/models` | Every model slot and task type |
-| `GET` | `/api/meta` | Registry version, provider summary, config |
-| `GET` | `/api/admin/dashboard` | HTML ops dashboard (`x-admin-key`) |
-| `GET` | `/api/admin/stats` | JSON slot telemetry (`x-admin-key`) |
-| `POST` | `/api/admin/reset` | Clear caches, benches, cooldowns (`x-admin-key`) |
+| `shared/config.py` | `.env` loading, typed settings, `BOT_SPECS`, `get_active_bots()` | all five |
+| `shared/history.py` | sliding-window conversation memory, 10 turns, 24 h TTL | all five |
+| `shared/payments.py` | free-action counter, Stars invoices, entitlements, optional USDT | all five |
+| `shared/gateway_client.py` | singleton HTTP pool to the gateway, typed `GatewayError`, retry policy | all five |
+| `shared/utils.py` | `split_telegram_message()`, HTML escaping, formatting helpers | all five |
 
-### Request
+### Startup sequence
+
+```
+validate_settings()           refuses to boot on an impossible configuration
+  └── Redis PING              one pool, shared by every product
+      └── for each active bot in BOT_SPECS
+            build Bot + Dispatcher + RedisStorage(prefix=konkred:fsm:{key})
+            include payment router, then the product router
+            inject history · payments · bot_spec
+            get_me()          a bad token disables that product, never the process
+            set_my_commands() the per-product Telegram menu
+      └── BOT_MODE=webhook → register one secret URL per bot, serve $PORT
+          BOT_MODE=polling → start N concurrent pollers, serve /healthz
+```
+
+A product whose token fails authentication is logged and skipped; the rest of the fleet keeps
+running. One product crashing its poller does not stop the others — each poller is supervised
+independently.
+
+### Adding a sixth product
+
+1. Add a `BotSpec` to `BOT_SPECS` in `shared/config.py` (key, token env, title, router path,
+   history prefix).
+2. Create `bots/bot_<key>/handlers.py` with a `router` and `bots/bot_<key>/keyboards.py` with its
+   own `CB_PREFIX`.
+3. Register it in `ROUTERS` and `COMMANDS` in `main.py`.
+4. Pick a gateway task lane — or add one to `TASK_ROUTES` if no existing chain fits.
+5. Set its token. Memory, FSM, payments, retries, fallback, webhooks and Docker are already done.
+
+### Why one process
+
+Five separate services would mean five Redis clients, five HTTP pools, five payment
+implementations, five deployment targets and five places to fix the same bug. One process means a
+single event loop scheduling all Telegram I/O, one connection pool per backend, and one place
+where memory, money and failure are handled. The cost of that choice is isolation discipline —
+which is why dispatchers, storages, callback prefixes and history namespaces are strictly
+per-product, and why the degradation suite drives all five products through the same failures.
+
+### The fleet in numbers
+
+| Product | Message handlers | Callback handlers | Keyboards | FSM states | Handler LOC | Lane |
+|---|:--:|:--:|:--:|:--:|:--:|---|
+| Content | 8 | 7 | 4 | 3 | 447 | `code-generation` |
+| PDF | 5 | 6 | 4 | — | 659 | `spec-generation` |
+| Voice | 6 | 1 | 3 | — | 338 | `summarization` |
+| IELTS | 9 | 6 | 3 | 3 | 682 | `general` + `summarization` |
+| Crypto | 7 | 5 | 3 | — | 477 | `classification` |
+| **Fleet** | **35** | **25** | **17** | **6** | **2 603** | 5 of 8 lanes |
+
+Plus the shared payment router — 3 message handlers, 1 callback handler and 1
+`pre_checkout_query` handler — included once per dispatcher, so it is written once and observed
+five times.
+
+### What a user sees when inference fails
+
+| Failure | What the product does |
+|---|---|
+| Gateway unreachable or `503` | a plain "try again shortly" reply, history untouched |
+| `429` from the gateway | the typed `retry_after` becomes a human wait hint |
+| `401` (bad gateway credential) | a generic apology — the credential problem never reaches the user |
+| `413` payload too large | a size-specific message naming the limit, not a traceback |
+| Unexpected exception | the handler catches, logs and answers; the status message is always resolved |
+
+No path leaves a "working on it…" placeholder as the last message, and no path prints a
+traceback, a URL or a provider name into the chat. All 25 combinations are asserted.
+
+### One message, end to end
+
+```
+1  Telegram update              →  the dispatcher for that product only
+2  payment router               →  pre-checkout / successful-payment events short-circuit here
+3  handler                      →  parses the command, uploads or callback data
+4  payments.require(user)       →  WATCH/MULTI reserve, or send the Stars invoice and stop
+5  history.get(user)            →  last 10 turns from konkred:hist:{bot}:{user}
+6  gateway_client.ask(...)      →  POST /api/ai with the product's task lane
+7  gateway                      →  cache → dedup → route → admit → dispatch → classify
+8  history.append(user, reply)  →  window trimmed, TTL refreshed
+9  split_telegram_message()     →  HTML-escaped chunks under 4096 characters
+```
+
+Steps 1-5, 8 and 9 are identical for all five products. Only steps 3 and 6 are product code —
+which is why a new product is a router, not a new service.
+
+### Fleet health surface
+
+The Python side exposes two endpoints of its own, independent of the gateway:
+
+```
+GET /         {"service":"konkred-bots","status":"ok","mode":"polling","bots":["crypto","pdf",…]}
+GET /healthz  {"status":"ok","mode":"webhook","activeBots":3,"pendingUpdates":0}
+```
+
+`activeBots` counts the products that actually authenticated with Telegram, and `pendingUpdates`
+is the number of webhook dispatches still in flight — the same set the shutdown path drains. The
+health probe deliberately does not `PING` Redis on every call: startup already proved the pool,
+and a hosted platform probing every few seconds should not pay for a round trip each time.
+
+### Configuration that shapes the fleet
+
+| Variable | Default | Effect on the fleet |
+|---|---|---|
+| `TELEGRAM_*_BOT_TOKEN` | — | presence decides which of the five products start |
+| `BOT_MODE` | `polling` | transport for every product at once |
+| `REDIS_URL` | `redis://127.0.0.1:6379/0` | the one pool behind history, FSM and payments |
+| `HISTORY_TURNS` / `HISTORY_TTL` | `10` / `86400` | conversation window depth and lifetime |
+| `FREE_REQUESTS` | `5` | free AI actions per user **per product** |
+| `STARS_PRICE` / `PAID_ACCESS_DAYS` | `100` / `30` | the Stars offer every product shows |
+| `PAYMENTS_ENABLED` | `true` | one switch disables the gate fleet-wide |
+| `MAX_FILE_MB` | `20` | upload ceiling for the document and voice products |
+| `GATEWAY_URL` / `GATEWAY_API_KEY` | `http://127.0.0.1:3000` / — | where the fleet sends inference |
+
+`.env.example` documents every variable, including the gateway-side knobs, and the `env-contract`
+test fails if it drifts from what the code actually reads.
+
+# Handler and keyboard isolation
+
+<img src="assets/readme/telegram-ingress.svg" width="100%" alt="Polling and webhook transports merging into one dispatch pipeline: payment router, feature router, handler with dependency injection">
+
+Sharing infrastructure is not the same as sharing behaviour. The products are deliberately
+isolated from each other:
+
+- **Separate dispatchers.** An update fed to the PDF dispatcher can never be observed by a voice
+  handler — they are different `Dispatcher` objects with different storages.
+- **Separate callback namespaces.** Each keyboard module owns a `CB_PREFIX`, so callback data
+  cannot collide across products even inside the same Telegram account.
+- **Payment first.** `create_payment_router()` returns a *fresh* router per dispatcher and is
+  included before the feature router, so `pre_checkout_query` and `successful_payment` are never
+  swallowed by a broad `F.text` catch-all.
+- **No cross-imports.** No `bot_*` module imports another `bot_*` module; the only shared imports
+  are `shared/`.
+- **Bounded output.** Every reply passes through `split_telegram_message()`, which respects
+  Telegram's 4096-character ceiling by splitting on paragraph breaks first, then line breaks, then
+  spaces, and only hard-slicing a genuinely unbreakable run.
+- **Untrusted model output.** Text is HTML-escaped before it reaches Telegram, and structured
+  output is validated field by field before it is rendered into a keyboard.
+
+| Isolated per product | Shared across the fleet |
+|---|---|
+| `Dispatcher`, FSM storage prefix, callback prefix | the asyncio event loop and the process |
+| conversation history namespace | the Redis connection pool |
+| free-action counter and entitlement key | the `PaymentManager` implementation and its router |
+| handler and keyboard modules | the gateway HTTP client and its retry policy |
+| Telegram command menu | `split_telegram_message()` and the formatting helpers |
+
+# Shared memory and FSM
+
+<img src="assets/readme/redis-state.svg" width="100%" alt="Redis namespaces for conversation history, aiogram FSM and the payment ledger, with per-bot isolation for the same user id">
+
+Three namespaces, all keyed by product:
+
+```
+konkred:hist:{bot}:{user_id}                      conversation window · JSON · 24 h TTL
+konkred:fsm:{bot}:{bot_id}:{chat}:{user}:data     aiogram FSM state and data
+konkred:pay:{bot}:free|access|pending:{user_id}   free counter, entitlement, pending USDT
+```
+
+The same Telegram user talking to all five bots keeps five independent conversations, five
+independent state machines and five independent free-action counters. Redis failures degrade
+memory rather than the product: `HistoryManager` logs the error and returns an empty window
+instead of raising into a handler.
+
+`HistoryManager` stores the window as one JSON document per user per product, trims it to
+`HISTORY_TURNS · 2` messages on every write, refreshes the 24-hour TTL at the same time, and
+discards a corrupt payload rather than propagating a decode error. Idle conversations therefore
+expire on their own — there is no cleanup job to run and no unbounded key growth. Aiogram's FSM
+uses `DefaultKeyBuilder(prefix="konkred:fsm:{key}", with_bot_id=True)`, so even two products
+sharing one Telegram account cannot collide.
+
+# Payments
+
+<img src="assets/readme/payment-rail.svg" width="100%" alt="Payment rail: five free actions reserved atomically, then a Telegram Stars invoice, pre-checkout validation and immediate unlock, with an optional manual USDT path">
+
+The first `FREE_REQUESTS` (default **5**) AI-powered actions per user **per bot** are free.
+Navigation, `/start`, help, uploading a document and quiz answer buttons do not consume the
+allowance — only calls that reach the gateway do.
+
+The counter is reserved with Redis `WATCH`/`MULTI` and retried up to eight times on contention, so
+concurrent messages cannot push a user past the ceiling. Request six sends a native **Telegram
+Stars (`XTR`)** invoice: the default offer is `STARS_PRICE=100` Stars for `PAID_ACCESS_DAYS=30`.
+The invoice payload is `v1:{bot}:{user}:{nonce}:{hmac}`, signed with `PAYMENT_SECRET` and bound to
+that user id; `pre_checkout_query` re-validates the currency, the amount and the signature before
+Telegram is allowed to charge anyone.
+
+> [!CAUTION]
+> An optional USDT path exists behind `USDT_WALLET_ADDRESS` with manual admin approval, and is
+> **off by default** — `render.yaml` ships that variable blank. Telegram's terms require digital
+> goods sold inside bots to use Stars, and a wallet address alone cannot prove an on-chain
+> payment. Enable it only with your own platform and legal guidance.
+
+| Action | Consumes an allowance? |
+|---|---|
+| `/start`, `/help`, `/clear`, menu navigation | no |
+| uploading a document or choosing a platform/tone | no |
+| answering a quiz question | no |
+| any call that reaches `POST /api/ai` | **yes** |
+| a follow-up button that re-asks the model (regenerate, minutes, debate) | **yes** |
+
+Setting `PAYMENTS_ENABLED=false` disables the gate entirely. All pricing values are environment
+settings, so changing them does not require a rebuild. `tests/test_payments.py` asserts the
+ceiling holds at exactly five, that 50 concurrent reservations never cross it, that a payload
+signed for one user is rejected for another, and that a granted entitlement short-circuits the
+counter.
+
+---
+
+# Technical architecture
+
+## Gateway routing
+
+<img src="assets/readme/gateway-routing.svg" width="100%" alt="Gateway request lifecycle across eight stages, candidate chain depth per task lane, and admission headroom gauges">
+
+The gateway is Node 20 ESM on native `node:http` with **zero runtime dependencies** — the image
+build fails if `package.json` ever grows one. A request walks eight stages: validate, per-user
+fair use, cache, in-flight dedup, route, slot admission, dispatch, classify. A classified failure
+re-enters slot admission with the next candidate rather than returning an error.
+
+| Surface | Method | Purpose |
+|---|---|---|
+| `/api/ai` | `POST` | run a completion |
+| `/api/health` | `GET` | liveness, ready slots, cache and dedup statistics |
+| `/api/models` | `GET` | every model slot, task type and live availability |
+| `/api/meta` | `GET` | registry version, provider summary, effective config |
+| `/api/admin/dashboard` | `GET` | HTML ops console (`x-admin-key`) |
+| `/api/admin/stats` | `GET` | JSON slot telemetry (`x-admin-key`) |
+| `/api/admin/reset` | `POST` | clear caches, benches and cooldowns (`x-admin-key`) |
 
 ```jsonc
+// POST /api/ai
 {
-  "taskType": "summarization",     // or task_type / task
+  "taskType": "summarization",   // 8 lanes; also accepted as task_type / task
   "messages": [{ "role": "user", "content": "..." }],
-  "system": "optional system prompt",
-  "temperature": 0.3,              // 0–2
-  "maxTokens": 2048,               // 1–65536
-  "model": "groq:llama-70b",       // optional pin
-  "jsonMode": false,
-  "stopSequences": [],             // up to 4
-  "privacy": false,                // true disables caching
-  "noCache": false,
-  "fusion": false,                 // multi-model consensus
-  "userId": "telegram:12345"       // fair-use accounting
+  "temperature": 0.3,            // 0-2        "maxTokens": 2048,   // 1-65536
+  "model": "groq:qwen3-27b",     // optional pin
+  "jsonMode": false, "fusion": false, "privacy": false,
+  "userId": "telegram:12345"     // per-user fair-use accounting
 }
 ```
 
-Limits: 60 messages and 2,000,000 characters per request.
-
-### Success
-
-```jsonc
-{
-  "requestId": "S6VJzPfSh6jd",
-  "text": "...",
-  "task": "summarization",
-  "model": "groq:llama-70b",
-  "provider": "groq",
-  "upstreamModel": "llama-3.3-70b-versatile",
-  "finishReason": "stop",
-  "usage": { "promptTokens": 412, "completionTokens": 260, "totalTokens": 672 },
-  "attempts": [ /* every slot tried, with outcome and latency */ ],
-  "fusion": { "enabled": false },
-  "cached": false,
-  "latencyMs": 842
-}
-```
-
-Also returned as headers: `x-request-id`, `x-model`, `x-provider`, `x-cache`.
-
-### Errors
-
-Always shaped `{"error": {"code", "message", ...}}`:
+A success carries `requestId`, `text`, `model`, `provider`, `upstreamModel`, `finishReason`,
+`usage`, `cached`, `latencyMs` and an `attempts` array describing every slot tried. Errors are
+always shaped `{"error": {"code", "message", ...}}`:
 
 | Status | Codes |
 |---|---|
@@ -588,391 +458,238 @@ Always shaped `{"error": {"code", "message", ...}}`:
 | `429` / `503` | `all_slots_rate_limited`, `all_candidates_failed` |
 | `500` | `internal_error` |
 
-<img src="assets/readme/divider.svg" width="100%" alt="">
+Admission never uses the raw published ceiling: RPM stops at 85%, TPM at 90%, RPD at 95% and TPD
+at 98%, with timezone-aware daily resets (midnight Pacific for Gemini, UTC for everyone else). The
+watchdog rolls windows every 60 seconds, releases expired cooldowns, calibrates a ceiling downward
+when a provider returns `429` earlier than the registry predicted, and persists counters to
+`gateway/data/runtime.state.json` so a restart does not reset the day.
 
-## Revenue gate
+The bot side is deliberately thin: one `httpx.AsyncClient` (20 keepalive connections, 120 s
+timeout), a typed `GatewayError` carrying `status_code`, `code`, `message` and `retry_after`, and
+a retry policy that only retries `502`/`504` and the codes `all_candidates_failed`,
+`all_slots_rate_limited` and `internal_error`. A `400` is never retried.
 
-<div align="center">
-<img src="assets/readme/chart-revenue.svg" width="100%" alt="Five free AI actions per user per bot, then a 100-star 30-day Telegram Stars pass">
-</div>
+### Cache, dedup, fusion and fair use
 
-The first **5 AI-powered actions per user, per bot** are free. Navigation and
-setup actions (`/start`, help, uploading a document, choosing a platform, quiz
-answer buttons) do not consume the allowance. Redis `WATCH`/`MULTI` makes the
-counter atomic, so concurrent requests cannot cross the ceiling.
+| Component | Behaviour |
+|---|---|
+| Cache | SHA-256 over `{taskType, messages, model, temperature, maxTokens, privacy}`; LRU of 500 entries, 600 s TTL; `privacy: true` never caches |
+| Dedup | identical in-flight requests collapse into one upstream call, hard TTL 180 000 ms, timers `unref()`ed so they never hold the loop open |
+| Fusion | optional multi-model consensus for a single answer; enabled by the crypto product for scans |
+| Fair use | per-user RPM / RPD / TPD keyed by Telegram user id, so one user cannot drain a shared free tier; tiers and overrides via `USERS_JSON` |
 
-Request 6 sends a native **Telegram Stars (`XTR`) invoice**. The default offer is
-100 Stars for a 30-day pass; Telegram's `pre_checkout_query` is validated against
-a signed, user-bound payload, and `successful_payment` writes the entitlement to
-Redis immediately. No external payment provider token is needed for Stars used
-to sell digital bot access.
+### Security posture
 
-> [!CAUTION]
-> An optional **USDT fallback** exists behind `USDT_WALLET_ADDRESS`, with manual
-> admin verification. Keep it **disabled for in-Telegram digital access** unless
-> you have obtained platform/legal guidance: Telegram's current terms require
-> digital goods and services sold inside bots to use Stars. Showing a wallet
-> address also cannot safely prove an on-chain payment by itself. The default
-> Render configuration leaves the address blank, so the compliant deployment
-> path is Stars only.
+- `ADMIN_KEY` is compared with `crypto.timingSafeEqual`; unset disables `/api/admin/*` entirely
+  rather than leaving it open.
+- The gateway is not meant to be public: Compose binds it to `127.0.0.1`, and the hosted image
+  keeps Node on loopback while only Python binds the platform port. Set `GATEWAY_API_KEY` if you
+  ever expose it.
+- Requests are bounded at 60 messages and 2 000 000 characters; uploads are bounded by
+  `MAX_FILE_MB`; audio and documents are processed in memory and never persisted.
+- Containers run unprivileged (`node`, `konkred`) with `tini` as PID 1, so `SIGTERM` reaches the
+  application and shutdown is graceful rather than a kill.
 
-All pricing and limits are environment settings, so they can be changed without
-a rebuild. Setting `PAYMENTS_ENABLED=false` disables the gate.
+## Provider fallback
 
-<img src="assets/readme/divider.svg" width="100%" alt="">
+<img src="assets/readme/provider-rack.svg" width="100%" alt="Provider rack listing 16 model slots across 8 providers with their published free-tier quotas, context windows and capabilities">
 
-## Configuration
+`gateway/data/policies.registry.json` (version `2026.09.1`) encodes 16 model slots across 8
+providers with their published free-tier envelopes, context windows and capability flags. Each
+task lane is a ranked candidate chain, 7 to 12 models deep, and **every chain ends in a local mock
+slot** — a lane cannot run out of candidates.
 
-Everything is environment-driven; `.env.example` documents every variable with
-links to where each credential is issued. Highlights:
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `TELEGRAM_*_BOT_TOKEN` | — | One per bot; empty means that bot stays offline |
-| `GEMINI_KEY_P1/P2/P3` | — | Up to three pooled Gemini keys for 3× daily quota |
-| `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY`, `GITHUB_TOKEN` | — | Optional providers; more keys means deeper fallback |
-| `CF_ACCOUNT_ID` + `CF_API_TOKEN` | — | Both required to enable Cloudflare Workers AI |
-| `ADMIN_KEY` | — | Unlocks `/api/admin/*`; unset disables the admin surface |
-| `GATEWAY_API_KEY` | — | Bearer token the bots present to the gateway |
-| `BOT_MODE` | `polling` | `polling` or `webhook` transport |
-| `WEBHOOK_HOST` / `WEBHOOK_SECRET` | — | Public HTTPS origin and Telegram webhook secret; Render origin is auto-detected |
-| `REDIS_URL` | `redis://127.0.0.1:6379/0` | Redis URL; use an external `rediss://` URL when hosted |
-| `FREE_REQUESTS` | `5` | Free AI actions per user per bot |
-| `STARS_PRICE` / `PAID_ACCESS_DAYS` | `100` / `30` | Stars pass price and lifetime |
-| `USDT_WALLET_ADDRESS` / `PAYMENT_ADMIN_IDS` | — | Optional manual USDT verification path |
-| `CACHE_TTL_SECONDS` / `CACHE_MAX_ENTRIES` | `600` / `500` | Response cache |
-| `DEDUP_TTL_MS` | `180000` | In-flight dedup hard TTL |
-| `HEADROOM_RPM/TPM/RPD/TPD` | `0.85/0.90/0.95/0.98` | Quota safety margin |
-| `USER_RPM` / `USER_RPD` / `USER_TPD` | `12` / `400` / `900000` | Per-user fair use |
-| `ALLOW_MOCK` / `MOCK_ONLY` | `true` / `false` | Mock fallback; offline mode |
-| `HISTORY_TURNS` / `HISTORY_TTL` | `10` / `86400` | Conversation memory |
-
-> [!TIP]
-> **Gemini is the only provider with native audio and PDF understanding.** The
-> voice and document bots produce their best results with at least one
-> `GEMINI_KEY_*` configured.
-
-<img src="assets/readme/divider.svg" width="100%" alt="">
-
-## Security model
-
-<table>
-<tr><td width="50%" valign="top">
-
-**🔑 Secrets never reach the repository.** `.env` is gitignored, only
-`.env.example` — which contains no secret values — is committed. The Render
-manifest references secrets with `sync: false` or generates them, so nothing
-sensitive lives in version control. Bot tokens are never placed in webhook URLs:
-the path contains an HMAC-derived value and Telegram must also send the
-`X-Telegram-Bot-Api-Secret-Token` header. Render's generated base64 secret is
-hashed to Telegram-safe hexadecimal before it is registered or compared.
-
-</td><td width="50%" valign="top">
-
-**⏱ Admin authentication is timing-safe.** The `x-admin-key` header is compared
-with `crypto.timingSafeEqual` over equal-length buffers, which does not leak the
-key through response timing. If `ADMIN_KEY` is unset, the entire `/api/admin/*`
-surface is disabled rather than left open.
-
-</td></tr>
-<tr><td width="50%" valign="top">
-
-**🛡 The gateway is not meant to be public.** In Compose it lives on a private
-bridge network. In the unified image Node binds only to `127.0.0.1:3000`; only
-the Python health/webhook server binds the platform's public `$PORT`. If you do
-expose the gateway separately, set `GATEWAY_API_KEY`.
-
-</td><td width="50%" valign="top">
-
-**⚖ Per-user fair use** is enforced inside the gateway on RPM, RPD and TPD, keyed
-by Telegram user id, so one user cannot exhaust a shared free-tier quota. Tiers
-and per-user overrides are configurable through `USERS_JSON`.
-
-</td></tr>
-<tr><td width="50%" valign="top">
-
-**👤 Containers run unprivileged.** The gateway runs as `node`, the bots as a
-dedicated `konkred` user. Both use `tini` as PID 1 so `SIGTERM` reaches the
-application and shutdown is graceful rather than a 10-second kill.
-
-</td><td width="50%" valign="top">
-
-**📦 Input is bounded everywhere.** Requests are capped at 60 messages and
-2,000,000 characters; uploads are capped by `MAX_FILE_MB` (Telegram's own ceiling
-is 20 MB); audio and documents are processed in memory and never persisted.
-Privacy-marked requests bypass the cache entirely.
-
-</td></tr>
-<tr><td width="50%" valign="top">
-
-**🧪 Output is treated as untrusted.** Model output is HTML-escaped before being
-sent to Telegram, and structured output (such as generated quizzes) is validated
-field by field — option counts, answer indices and types are all checked before
-anything is rendered into a keyboard.
-
-</td><td width="50%" valign="top">
-
-> [!WARNING]
-> On a public VPS, do not publish the gateway port to `0.0.0.0`. When
-> `GATEWAY_API_KEY` is empty the gateway accepts unauthenticated `/api/ai`
-> calls by design — safe on a private compose network, an open proxy on the
-> open internet. `docker-compose.yml` binds to `127.0.0.1` for this reason.
-
-</td></tr>
-</table>
-
-<img src="assets/readme/divider.svg" width="100%" alt="">
-
-## Local development
-
-Run the two tiers directly, without Docker.
-
-```bash
-# Terminal 1 — gateway (no credentials needed in mock mode)
-cd gateway
-MOCK_ONLY=true ADMIN_KEY=dev-key node src/server.mjs
-
-# Terminal 2 — bots
-cd bots
-pip install -r requirements.txt
-GATEWAY_URL=http://127.0.0.1:3000 REDIS_URL=redis://localhost:6379/0 python main.py
-```
-
-`MOCK_ONLY=true` makes the gateway answer entirely from its deterministic mock
-provider — no outbound network calls at all, which is exactly what CI uses.
-
-<img src="assets/readme/divider.svg" width="100%" alt="">
-
-## Testing
-
-```bash
-# Gateway — 55 tests, ~1.9s
-cd gateway && node --test test/*.test.mjs
-
-# Bots — compile + lint
-cd bots && python -m compileall -q . && python -m flake8 .
-
-# Bots — graceful degradation when the gateway cannot answer (25 scenarios)
-cd bots && python tests/test_degradation.py
-
-# Revenue gate — ceiling, concurrency, signed payload and paid entitlement
-cd bots && python tests/test_payments.py
-
-# Webhook — secret authentication and sub-200 ms acknowledgement
-cd bots && python tests/test_webhook.py
-
-# Bots — live end-to-end against a real gateway (no credentials needed)
-cd gateway && MOCK_ONLY=true node src/server.mjs &
-cd bots && python tests/test_end_to_end.py
-
-# README assets — colours, dangling gradient refs, viewBox overflow
-python3 assets/readme/lint-svg.py
-```
+One slot is a `(provider, model, credential)` triple, so three `GEMINI_KEY_*` variables triple the
+Gemini slots. Requests are sized in tokens and validated against a model's context window *before*
+a slot is assigned, so an oversized prompt is never dispatched to a model that cannot hold it.
 
 > [!IMPORTANT]
-> **Activating CI:** the pipeline lives at `ci/github-actions-ci.yml` rather
-> than `.github/workflows/ci.yml`, because the GitHub App used to push this
-> branch lacks the `workflows` permission. Move it into place with
-> `git mv ci/github-actions-ci.yml .github/workflows/ci.yml` — no edits needed.
-> See [`ci/README.md`](ci/README.md).
+> Model ids drift. An upstream that answers "this model has been decommissioned" is classified
+> `model_unavailable`, the model is benched for 24 hours, and the request continues to the next
+> candidate instead of failing. The log line names the registry entry to update.
 
-CI runs four jobs on every push and pull request:
+## Degradation handling
 
-<div align="center">
-<img src="assets/readme/chart-ci.svg" width="100%" alt="Four CI jobs: gateway, bots, integration and compose, with what each one proves">
-</div>
+<img src="assets/readme/degradation-flow.svg" width="100%" alt="Eleven gateway error classes mapped to six recovery actions, and a 5 by 5 matrix of bots against gateway failures, all passing">
 
-| Job | What it proves |
-|---|---|
-| **gateway** | registry is valid, every routed model still exists in it, every `.mjs` parses, the full import graph resolves, 51 unit tests pass, and a live server answers health/models/meta/inference, rejects a bad admin key with `401`, accepts the real one with `200`, and rejects a malformed body with `400` |
-| **bots** | every module byte-compiles, flake8 is clean, routers and command menus line up with `BOT_SPECS` and every router has handlers, the message splitter holds its invariants over 300 randomised cases, all five bots degrade gracefully across 25 gateway-failure scenarios, every bot flow produces a real answer against a live gateway over real HTTP, every `task_type` the bots send is one the gateway actually supports, and history + FSM namespaces are proven isolated on fakeredis |
-| **integration** | the real `GatewayClient` drives a real gateway over HTTP across every task route the bots use, including multimodal audio parts and JSON mode, and the rate limiter produces a correctly typed, user-presentable error |
-| **compose** | `docker compose config` validates, the local service list is exactly `bot gateway redis`, every YAML manifest parses, all build contexts exclude secrets/caches, the unified hosted image builds, the gateway stays dependency-free, and both shell entrypoints pass `bash -n` plus shellcheck |
+Eleven error classes map to six recovery actions in `RECOVERY_ACTIONS`. An empty completion is
+treated as an error, not an answer: `SAFETY`, `RECITATION`, `BLOCKLIST` and `content_filter`
+finish reasons raise a typed error so the chain continues instead of handing back a blank message.
 
-<img src="assets/readme/divider.svg" width="100%" alt="">
+On the product side, `tests/test_degradation.py` drives every bot through five gateway failures —
+`503`, `429`, `401`, `413` and an unexpected exception. All 25 combinations must produce a real
+reply, with no raised handler and no traceback, URL or provider name leaking into the message.
 
-## Deployment
+## Webhooks
 
-### Local Docker Compose
+<img src="assets/readme/webhook-flow.svg" width="100%" alt="Webhook sequence: authenticate the path secret and header secret, validate the update, schedule dispatch and answer 200 immediately">
 
-Compose remains the best local-development path and still runs Redis, gateway
-and bots as separate services:
+In `BOT_MODE=webhook`, aiohttp serves `POST /webhook/{bot_key}/{path_secret}`. The path segment is
+`HMAC-SHA256(WEBHOOK_SECRET, "{key}:{token}")[:32]`, compared with `hmac.compare_digest` — a bot
+token never appears in a URL. Telegram's `X-Telegram-Bot-Api-Secret-Token` header must also match,
+and Render's generated base64 secret is hashed to Telegram-safe hexadecimal before registration.
 
-```bash
-./setup.sh
-```
+A valid update is scheduled as a background task and Telegram receives `200 OK` immediately
+(measured at 0.6–0.9 ms in `tests/test_webhook.py`), so downloads and inference never block the
+acknowledgement. `DROP_PENDING_UPDATES=false` is intentional: the update that wakes a sleeping
+free instance must not be discarded.
 
-### Render — one free web service
+In `BOT_MODE=polling`, every dispatcher long-polls concurrently and the same aiohttp app serves
+only `/` and `/healthz`.
 
-The root `Dockerfile` combines Node and Python in one container. Node listens
-privately on loopback port 3000; Python listens on Render's dynamic `$PORT` and
-handles `/healthz` plus Telegram webhooks. `render.yaml` contains exactly one
-`plan: free` web service—no worker and no Render Redis instance.
+## Operations and troubleshooting
 
-1. Create a free Redis database (for example Upstash) and copy its TLS
-   `rediss://default:...` connection URL.
-2. In Render choose **New → Web Service**, connect this repository, select
-   **Docker**, root directory `.` and the **Free** instance type. You can also
-   apply `render.yaml`; it now creates only the single free web service.
-3. Add `REDIS_URL` and at least one `TELEGRAM_*_BOT_TOKEN`.
-4. Keep `BOT_MODE=webhook`. Render automatically supplies
-   `RENDER_EXTERNAL_URL`; set `WEBHOOK_HOST=https://your-service.onrender.com`
-   manually only if that automatic value is unavailable.
-5. Generate `WEBHOOK_SECRET` and `PAYMENT_SECRET` with
-   `openssl rand -hex 32` (the blueprint generates both automatically).
-6. Keep `FREE_REQUESTS=5`; choose your `STARS_PRICE` and
-   `PAID_ACCESS_DAYS`. For USDT, also set `USDT_WALLET_ADDRESS`,
-   `PAYMENT_ADMIN_IDS` and `PAYMENT_SUPPORT`.
-7. Add at least one free AI provider key for real model output. OpenRouter's
-   free router covers every text task without a payment method; native voice
-   transcription still needs a multimedia-capable key such as Gemini. With no
-   provider key, `ALLOW_MOCK=true` keeps the service testable but produces mock
-   answers.
-8. Deploy and open `https://your-service.onrender.com/healthz`. Logs should show
-   each active bot followed by `webhook registered`.
-
-`DROP_PENDING_UPDATES=false` is intentional in webhook mode: an update that
-wakes a sleeping service must not be discarded during startup. Telegram retries
-an unsuccessful webhook while the free instance starts.
-
-**Free-tier limits:** Render documents roughly one-minute cold starts, 512 MB RAM,
-750 instance-hours per workspace/month, ephemeral local storage, and possible
-suspension for unusually high outbound traffic. The hosted profile caps Node's
-heap, cache entries, and upload size accordingly, and all durable state stays in
-Redis. A Stars invoice should be paid while the bot is awake; if an old invoice
-fails pre-checkout after a long idle period, send the request again to wake the
-bot and issue a fresh invoice. Render explicitly positions Free instances for
-hobby/testing rather than production SLAs.
-
-### Hugging Face Docker Space — supported, but no longer a zero-card path
-
-The root image remains compatible with Docker Spaces (`BOT_MODE=polling`,
-`PORT=7860`), but Hugging Face now requires a PRO, Team, or Enterprise plan to
-create a new compute-backed Docker Space. CPU Basic has no hourly compute charge
-once available, yet account access itself is paid and free hardware can sleep.
-It therefore does **not** meet this project's zero-credit-card deployment goal.
-Use Render webhook mode for the genuinely free hosted path.
-
-### Your own server over SSH
-
-If you have a VPS or an always-free cloud VM, Compose is the most durable option:
-all three services, `restart: unless-stopped`, no cold starts and no sleep. A
-step-by-step runbook — Docker install, `.env`, `setup.sh`, reboot persistence,
-SSH-tunnel dashboard access and low-RAM tuning — is in
-[`docs/deploy-vps-fa.md`](docs/deploy-vps-fa.md) (Persian). Background on which
-free tiers still exist in 2026 is in
-[`docs/free-hosting-2026.md`](docs/free-hosting-2026.md).
-
-### Required hosted secrets
-
-Never commit these values:
-
-```text
-REDIS_URL=rediss://...
-TELEGRAM_<BOT>_BOT_TOKEN=...
-WEBHOOK_SECRET=...             # Render only
-PAYMENT_SECRET=...
-GEMINI_KEY_P1=...              # or another provider key
-```
-
-<img src="assets/readme/divider.svg" width="100%" alt="">
-
-## Operations
-
-```bash
-docker compose logs -f bot          # bot activity
-docker compose logs -f gateway      # routing decisions, fallbacks, quota events
-docker compose restart gateway      # reload after changing provider keys
-```
-
-The gateway logs one JSON object per line — request id, task, chosen slot,
-attempt chain, latency — so it drops straight into any log aggregator.
-
-With `ADMIN_KEY` set, the HTML dashboard at `/api/admin/dashboard` shows live
-slot health, per-window quota consumption, cooldowns, benched providers, cache
-hit rate and dedup savings:
-
-```bash
-curl -H "x-admin-key: $ADMIN_KEY" localhost:3000/api/admin/dashboard
-curl -H "x-admin-key: $ADMIN_KEY" localhost:3000/api/admin/stats | jq
-```
-
-<img src="assets/readme/divider.svg" width="100%" alt="">
-
-## Troubleshooting
+`docker compose logs -f gateway` prints one JSON object per request — id, task, chosen slot,
+attempt chain, latency. With `ADMIN_KEY` set, `/api/admin/dashboard` shows live slot health.
 
 | Symptom | Cause and fix |
 |---|---|
-| Health reports `degraded` | Only the mock provider is ready. Add a real provider key and restart the gateway. |
-| Bot does not respond | Confirm its token is set. In webhook mode, check logs for `webhook registered`, ensure `WEBHOOK_HOST` is HTTPS, and keep `DROP_PENDING_UPDATES=false`. |
-| Service exits with a webhook configuration error | Set `WEBHOOK_SECRET` to at least 16 safe characters and provide `WEBHOOK_HOST`, or let Render inject `RENDER_EXTERNAL_URL`. |
-| Request 6 does not show an invoice | Check `PAYMENTS_ENABLED=true`, `STARS_PRICE` is a positive integer, and inspect Telegram API errors in logs. |
-| Stars paid but access stayed locked | Confirm Redis is reachable and `PAYMENT_SECRET` did not change between invoice creation and payment. Use `PAYMENT_SUPPORT` for receipts. |
-| USDT admin receives no approval request | Set numeric `PAYMENT_ADMIN_IDS`; each admin must first open the bot so Telegram permits it to message them. |
-| Every reply looks like a mock | No provider credentials were loaded, or `MOCK_ONLY=true` is still set. |
-| `all_slots_rate_limited` | Free-tier quota is exhausted for this task. Add another provider key, or wait for the daily reset (midnight Pacific for Gemini, UTC elsewhere). |
-| `429 user_rpm` | Per-user fair use, not a provider limit. Raise `USER_RPM` or grant that user a tier in `USERS_JSON`. |
-| Audio or PDF results are weak | Add a `GEMINI_KEY_*`; Gemini is the only configured provider with native audio and PDF understanding. |
-| `/api/admin/*` returns 401 | `ADMIN_KEY` is unset (surface disabled) or the `x-admin-key` header does not match. |
-
-<img src="assets/readme/divider.svg" width="100%" alt="">
+| Health reports `degraded` | Only the mock provider is ready — add a provider key, restart the gateway. |
+| A bot never answers | Its token is unset; in webhook mode check for `webhook registered`. |
+| `429 user_rpm` | Per-user fair use, not a provider limit — raise `USER_RPM` or grant a tier. |
+| Stars paid but access locked | Check Redis, and that `PAYMENT_SECRET` did not change mid-flow. |
 
 ## Repository layout
 
 ```
 konkred-bots/
-├── Dockerfile                  unified Node + Python hosted image
-├── entrypoint.sh               supervises both runtimes and forwards signals
-├── render.yaml                 one free webhook web service
-├── docker-compose.yml          local three-tier development stack
-├── setup.sh                    one-command local bootstrap
-├── .env.example                every variable, documented
-├── ci/github-actions-ci.yml    gateway · bots · integration · manifests
-│
-├── assets/readme/              animated SVG diagrams used by this README
-│   ├── build-route-chart.mjs   regenerates chart-routes.svg from TASK_ROUTES
-│   └── lint-svg.py             colour / reference / viewBox linter
-│
-├── gateway/                    Node 20 · ESM · zero dependencies
-│   ├── Dockerfile              node:20-alpine, non-root, HEALTHCHECK
-│   ├── .dockerignore           keeps secrets, tests and caches out of the image
-│   ├── data/
-│   │   └── policies.registry.json   16 model slots across 8 providers
-│   ├── src/
-│   │   ├── server.mjs          native node:http routing
-│   │   ├── config.mjs          env loading, credential discovery
-│   │   ├── policy-store.mjs    registry loading and validation
-│   │   ├── watchdog.mjs        window rolling, self-calibration
-│   │   ├── dashboard.mjs       HTML ops dashboard
-│   │   ├── util.mjs            logging, JSON, token estimation
-│   │   ├── providers/          gemini · openai-compat · cloudflare · mock
-│   │   └── gateway/            cache · dedup · key-pool · router
-│   │                           fallback · user-limiter · fusion
-│   └── test/                   gateway.test.mjs (51) + env-contract.test.mjs (4)
-│
-└── bots/                       Python 3.11 · Aiogram 3.15
-    ├── Dockerfile              multi-stage, non-root, tini
-    ├── .dockerignore           keeps secrets and __pycache__ out of the image
-    ├── main.py                 orchestrator: N bots, one event loop
-    ├── requirements.txt
-    ├── shared/                 config · gateway_client · history · payments · utils
-    ├── tests/                  degradation (25 scenarios) + live end-to-end suites
-    ├── bot_voice/              transcription, summary, action items
-    ├── bot_pdf/                summary, quiz, flashcards, risk analysis
-    ├── bot_ielts/              three-part FSM mock interview
-    ├── bot_content/            hooks, scripts, SEO captions
-    └── bot_crypto/             sentiment, drivers, risk
+├── bots/                       Python 3.11 · Aiogram 3.15
+│   ├── main.py                 orchestrator: N bots, one event loop
+│   ├── shared/                 config · history · payments · gateway_client · utils
+│   ├── bot_content/  bot_pdf/  bot_voice/  bot_ielts/  bot_crypto/
+│   └── tests/                  degradation · payments · webhook · end-to-end
+├── gateway/                    Node 20 · ESM · zero runtime dependencies
+│   ├── src/gateway/            router · key-pool · cache · dedup · fallback · fusion · limiter
+│   ├── src/providers/          gemini · openai-compat · cloudflare · mock
+│   ├── data/                   policies.registry.json — 16 slots, 8 providers
+│   └── test/                   gateway.test.mjs · env-contract.test.mjs
+├── assets/readme/              the 14 diagrams in this file + their generator and linter
+├── ci/                         the GitHub Actions workflow, not yet installed (see below)
+├── Dockerfile · entrypoint.sh  unified hosted image
+├── docker-compose.yml          local three-service stack
+├── render.yaml                 one free web service
+└── setup.sh                    one-command local bootstrap
 ```
 
-<img src="assets/readme/divider.svg" width="100%" alt="">
+---
+
+# Setup, testing and deployment
+
+## Quick start
+
+```bash
+git clone https://github.com/reARbitRA/konkred-bots.git
+cd konkred-bots
+cp .env.example .env          # setup.sh also does this on first run
+$EDITOR .env                  # add at least one TELEGRAM_*_BOT_TOKEN, ideally one provider key
+./setup.sh                    # build, start, wait for the gateway to report healthy
+```
+
+`./setup.sh --logs`, `--status` and `--down` follow logs, report health without rebuilding, and
+stop the stack. Without Docker: `cd gateway && MOCK_ONLY=true node src/server.mjs` in one terminal, then
+`cd bots && pip install -r requirements.txt && python main.py` in another. A `degraded` health
+status with no provider keys is expected — the pool is alive but only the mock provider is ready;
+`503` means the pool is genuinely empty.
+
+## Docker
+
+<img src="assets/readme/docker-topology.svg" width="100%" alt="Compose topology of redis, gateway and bot with healthchecks and volumes, plus the unified hosted image running Node on loopback and Python on the public port">
+
+Compose runs three services on a private bridge network with real dependency ordering: `gateway`
+waits for `redis-cli ping`, `bot` waits for `/api/health`. The gateway port is published to
+`127.0.0.1` only. For hosting, the root `Dockerfile` fuses both runtimes into one container —
+Node on loopback `:3000`, Python on `$PORT` — supervised by `entrypoint.sh` under `tini`.
+
+## CI and testing
+
+<img src="assets/readme/test-console.svg" width="100%" alt="Terminal transcript of the local verification cycle with the exact commands and their output">
+
+> [!WARNING]
+> **GitHub Actions is not wired on this branch, and this README does not claim it is.** The
+> four-job pipeline lives at [`ci/github-actions-ci.yml`](ci/github-actions-ci.yml); `.gitignore`
+> excludes `.github/workflows/`, and a push installing it is rejected — *"refusing to allow a
+> GitHub App to create or update workflow `.github/workflows/ci.yml` without `workflows`
+> permission"*, re-verified on this branch. Every result below was produced **locally**.
+
+Activate it from a clone that uses your own credentials — it needs no edits and no secrets,
+because every job runs with `MOCK_ONLY=true`:
+
+```bash
+mkdir -p .github/workflows
+git show HEAD:ci/github-actions-ci.yml > .github/workflows/ci.yml
+git add -f .github/workflows/ci.yml        # .gitignore currently excludes the path
+git commit -m "ci: activate the GitHub Actions pipeline" && git push
+```
+
+The local cycle, and what each command proves:
+
+```bash
+cd gateway
+node --check $(find src test -name '*.mjs')      # 22 files parse
+node -e "import('./src/server.mjs')"             # the whole ESM graph resolves
+node --test test/*.test.mjs                      # 55 unit tests, registry integrity included
+
+cd ../bots
+python -m compileall -q . && python -m flake8 .
+python tests/test_degradation.py                 # 25 gateway-failure scenarios
+python tests/test_payments.py                    # ceiling, concurrency, signed payload
+python tests/test_webhook.py                     # secret enforcement, fast acknowledgement
+
+cd ../gateway && MOCK_ONLY=true node src/server.mjs &
+cd ../bots && python tests/test_end_to_end.py    # 12 live steps over real HTTP
+
+cd .. && python3 assets/readme/build_assets.py   # regenerate the 14 diagrams
+python3 assets/readme/lint_assets.py             # palette, refs, viewBox, README paths
+```
+
+Results from the run that produced this README:
+
+| Check | Result |
+|---|---|
+| Gateway syntax · ESM graph | 22 files, 0 errors · registry `2026.09.1`, 16 models, 8 providers |
+| Gateway unit tests | **55 passed**, 0 failed, 1.73 s |
+| Python compile · flake8 | clean · clean |
+| Degradation | **25/25 scenarios handled** |
+| Payments · webhook | ceiling, entitlement, payload, concurrency · secret enforced, 0.9 ms ack |
+| End-to-end | **12 live steps**, task-type contract holds |
+| HTTP smoke | 200 health/models/meta · 200 `/api/ai` · 401 bad admin key, 200 good · 400 malformed · 404 unknown |
+| Manifests | compose `bot gateway redis` · render 1 web service · CI 4 jobs · `bash -n` clean |
+| Assets | 14/14 present, on-palette, inside viewBox |
+
+Docker is not installed in the sandbox that produced this run, so image builds were validated
+structurally rather than executed.
+
+## Deployment
+
+<img src="assets/readme/deployment-map.svg" width="100%" alt="Three deployment targets — local Compose, a single Render free web service, and your own server — with their transports, Redis and cost conditions">
+
+**Local Compose** — `./setup.sh`: three services, `restart: unless-stopped`, polling.
+
+**Render, one free web service** — `render.yaml` creates exactly one `plan: free` web service and
+no Render Redis. Attach an external Redis as `REDIS_URL`, add at least one `TELEGRAM_*_BOT_TOKEN`,
+keep `BOT_MODE=webhook`, and let the blueprint generate `WEBHOOK_SECRET` and `PAYMENT_SECRET`.
+Render injects `RENDER_EXTERNAL_URL` itself. Deploy, open `/healthz`, and the logs should show
+each active bot followed by `webhook registered`.
+
+**Your own server** — the same Compose stack behind a restart policy: no cold starts, no sleep.
+Keep the gateway off `0.0.0.0`, or set `GATEWAY_API_KEY` if you must expose it.
+
+### Cost conditions, stated exactly
+
+- Every registry slot is a **published free tier**: with only those credentials there is no
+  per-token bill, but provider quotas, terms and plan changes still apply, and the registry must
+  be refreshed as vendors retire model ids.
+- Render's free plan is free **within its own limits** — roughly one-minute cold starts, 512 MB
+  RAM, 750 instance-hours per workspace per month, ephemeral disk. External Redis has its own.
+- With no provider credentials the gateway answers from its mock provider and reports
+  `status=degraded`: fully testable, but not model output.
+
+Hosted secrets, never committed: `REDIS_URL`, one or more `TELEGRAM_*_BOT_TOKEN`,
+`WEBHOOK_SECRET` (webhook mode), `PAYMENT_SECRET`, and a provider key such as `GEMINI_KEY_P1`.
+`.env` is gitignored; only `.env.example` is committed and it holds no secret values.
 
 ## License
 
-MIT
+MIT.
 
-<div align="center">
-<br>
-<sub>Built to stay inside every free tier — and to keep answering when one of them says no.</sub>
-<br><br>
-<img src="https://img.shields.io/badge/⬡-Konkred-22D3EE?style=flat-square&labelColor=0A0B10" alt="Konkred">
-</div>
+<img src="assets/readme/footer-fleet.svg" width="100%" alt="Konkred bot fleet footer: content, pdf, voice, ielts and crypto on one shared rail">
